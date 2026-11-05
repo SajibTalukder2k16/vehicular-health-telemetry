@@ -47,6 +47,7 @@ renamed, rename it here in the same commit.
 
 | Result in the paper | Produced by |
 |---|---|
+| Room-to-road regimes (matched indoor vs urban vs rural) | `tools/analyze_room_road.py` |
 | Oracle static frontiers; the headline margins | `tools/analyze_static_oracle.py` |
 | Load comparison, matched within seed | `tools/analyze_load_effect.py` |
 | Signal-source frontiers | `tools/analyze_target_frontier.py` |
@@ -54,7 +55,7 @@ renamed, rename it here in the same commit.
 | Corridor population, strata and coverage percentiles | `tools/sample_corridors.py` |
 | Quality-control checks | `tools/qc_check.py` |
 | Terminal bucket rates; static admission counts | `tools/qc_check.py`, `tools/export_results.py` |
-| Figures | `analysis/figures_src/fig6_oracle_frontier.py`, `analysis/figures_src/fig7_load_effect.py` |
+| Figures | `analysis/figures_src/arch_room_road.py`, `analysis/figures_src/fig6_oracle_frontier.py`, `analysis/figures_src/fig7_load_effect.py` |
 | Campaign drivers that produce the input for all of the above | `tools/corridor_seeds10.sh`, `corridor_loaded.sh`, `corridor_static_sweep.sh`, `corridor_target_sweep.sh` |
 
 The BLE and system-level calibration figures quoted in the paper's Calibration
