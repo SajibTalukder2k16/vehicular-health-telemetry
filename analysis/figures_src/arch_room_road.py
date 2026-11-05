@@ -174,13 +174,14 @@ def main():
         ax.add_patch(FancyBboxPatch((x, y), w, h,
                                     boxstyle='square,pad=0.02',
                                     fc=fc, ec=ec, lw=lw, zorder=3))
-        dy = 0.15 if sub else 0.0
+        nsub = sub.count('\n') + 1 if sub else 0
+        dy = 0.15 + 0.05 * (nsub - 1) if sub else 0.0
         ax.text(x + w / 2, y + h / 2 + dy, label, ha='center', va='center',
                 fontsize=fs, color=INK, fontweight='bold', zorder=4)
         if sub:
-            ax.text(x + w / 2, y + h / 2 - 0.24, sub, ha='center',
-                    va='center', fontsize=FS_SUB, color=INK, zorder=4,
-                    linespacing=1.25)
+            ax.text(x + w / 2, y + h / 2 - 0.20 - 0.05 * (nsub - 1), sub,
+                    ha='center', va='center', fontsize=FS_SUB, color=INK,
+                    zorder=4, linespacing=1.25)
 
     def arrow(x1, y1, x2, y2, label='', ly=0.17, lx=0.0, color=INK,
               style='-', lw=0.9, ha='center'):
@@ -195,7 +196,14 @@ def main():
 
     # ---- Tier 1: the sensor rig, identical in both settings ---------------
     box(0.10, 3.30, 1.95, 0.60, 'Wearable vitals', '512 B, exp(1 s)')
+    # OBD-II is a vehicle port. A room deployment has the wearable and the
+    # camera only; the matched indoor runs carry the OBD stream anyway, to
+    # hold the rig constant, which makes the indoor result conservative.
+    # The note goes BELOW the box: a second sub-line clips through the frame.
     box(0.10, 2.22, 1.95, 0.60, 'OBD-II context', '256 B, exp(2 s)')
+    ax.text(1.07, 2.10, 'vehicle only — see caption', ha='center',
+            va='top', fontsize=FS_NOTE, color=INK_SOFT, zorder=4,
+            style='italic')
     box(0.10, 1.14, 1.95, 0.60, 'Cabin camera', '4 KiB, 2 Hz')
 
     # ---- Tier 2: the edge device, identical in both settings --------------

@@ -15,6 +15,15 @@ backhaul: 802.11n/ac in a 10 m room against LTE from a moving vehicle. Those
 are the only room numbers this script will report, and the only ones the
 paper may quote.
 
+One deliberate exception, and it runs the safe way. OBD-II is a vehicle port;
+a real indoor installation carries the wearable and the camera only, and the
+unmatched `Room*` configs set `hasObd = false` accordingly. `RoomMatched*`
+sets it true, because holding the offered workload identical is what makes
+the comparison mean anything -- dropping a stream indoors would put back the
+confound these configs exist to remove. The indoor numbers are therefore
+measured while carrying ~1.5% of offered bytes a room would not generate, so
+they understate the indoor setting rather than flatter it.
+
 What the contrast is FOR. The room runs have `admissionPolicy = "none"` --
 the room ini never sets it and EdgeApp defaults to none. So the room is not
 another arm of the controller comparison; it is the setting in which the
