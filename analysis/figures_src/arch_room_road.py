@@ -221,7 +221,7 @@ def main():
 
     arrow(2.05, 3.60, 3.05, 3.05, 'BLE', ly=0.20)
     arrow(2.05, 2.52, 3.05, 2.55, 'wired / BLE', ly=0.19)
-    arrow(2.05, 1.44, 3.05, 2.05, 'wired / BLE', ly=-0.24)
+    arrow(2.05, 1.44, 3.05, 2.05, 'wired / BLE / WLAN', ly=-0.24)
 
     # the alarm is generated at the edge, not by a Tier-1 device
     ax.plot(4.15, 3.98, marker='o', markersize=3.2, color=INK, zorder=4)

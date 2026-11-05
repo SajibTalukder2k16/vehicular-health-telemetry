@@ -44,7 +44,7 @@ from collections import defaultdict
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from analyze_ablation import kpis, mean_ci, parse   # noqa: E402
 
-ROOM_RE = r'(RoomMatched\w+)-#(\d+)$'
+ROOM_RE = r'(Room\w+)-#(\d+)$'
 DC_RE = r'(DcDrive\w+)-#(\d+)$'
 
 # Statistic -> the `field mean` of its :stats block. parse() reads only

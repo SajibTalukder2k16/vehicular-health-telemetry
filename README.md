@@ -48,6 +48,7 @@ renamed, rename it here in the same commit.
 | Result in the paper | Produced by |
 |---|---|
 | Room-to-road regimes (matched indoor vs urban vs rural) | `tools/analyze_room_road.py` |
+| WLAN sensor-link unit validation | `tools/validate_wifi.py` |
 | Oracle static frontiers; the headline margins | `tools/analyze_static_oracle.py` |
 | Load comparison, matched within seed | `tools/analyze_load_effect.py` |
 | Signal-source frontiers | `tools/analyze_target_frontier.py` |
