@@ -64,7 +64,10 @@ explicitly wired, positioning itself against prior wireless AoI work. Rates
 come from a network-wide optimization, not from online feedback.
 
 ### FAIFO (Ad Hoc Networks, 2022) — different layer
-*Indexed abstract only; full text is paywalled. Flagged for library check.*
+*Indexed abstract only; full text is paywalled, and as of 2026-11-05 the
+authors, exact title and volume/page metadata could not be verified from any
+source we can reach. **Not cited in `main_v05.tex`, by decision** — see the
+closing note below.*
 
 Programmable packet scheduling in the PIFO / SP-PIFO / AIFO lineage. Two
 queues: an admission step filters high-priority low-latency packets into queue
@@ -74,7 +77,15 @@ queue B, balanced by a modified credit-based shaper.
 **Has none of the three as stated.** It is a data-plane queue discipline
 requiring a programmable switch; it reorders and salvages packets already
 offered rather than controlling an offered rate, and it uses no receiver
-feedback. Cited as the freshness-aware-queueing alternative to rate control.
+feedback.
+
+**Dropped rather than cited (2026-11-05).** It would have been the
+freshness-aware-queueing alternative to rate control, but the queue-discipline
+position is already held in the paper by the LGFS paragraph, which cites a
+survey we have actually read. Adding FAIFO would mean a bib entry assembled
+from a secondary listing for a paper we have not read, to make a point the
+draft already makes. Retrieve the full text if a reviewer raises it; until
+then there is nothing in the manuscript resting on it.
 
 ### LGFS family (PP-MAF-LGFS, NP-LGFS; Bedewy, Sun, Shroff et al.) — server discipline
 *Read from surveys and the AoI survey PDF, not the primary papers.*

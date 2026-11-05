@@ -170,7 +170,10 @@ Easy to misread later, so stated plainly:
      on seed, so the 28 pp camera-link split inflated the other factors'
      intervals ~2×. Conclusion unchanged and now better supported.
      `tools/analyze_deconf.py` regenerates the table.
-3. **FAIFO full text** — paywalled, user's task, the one open literature item.
+3. ~~**FAIFO full text**~~ — **closed 2026-11-05, dropped not cited.** The
+   manuscript never cited it and does not need to; the queue-discipline
+   position is held by the LGFS paragraph, which cites a survey we read. See
+   `RELATED_WORK.md`.
 4. Optional: the `bgues=2` level could now be run *with* traffic for a genuine
    three-point load axis. Not needed for the current claims — the two-point
    comparison already shows load-robustness — so this is a strengthening move,
