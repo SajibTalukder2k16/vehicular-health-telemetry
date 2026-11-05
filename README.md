@@ -15,9 +15,12 @@ number in it.
 | `analysis/*.csv` | Derived per-run summary tables for the earlier feasibility family. Not the raw corpus. |
 | `docs/` | Method and provenance notes: calibration, tower data, corridor sampling, the Simu5G defects, and `CORRECTIONS_2026-10.md`, a log of errors found in our own earlier analyses and what each one changed. |
 | `patches/` | A diff against Simu5G tag `v1.4.4` carrying the three defects described in `docs/SIMU5G_PATCHES.md`. |
-| `paper/` | The manuscript source, bibliography and figure PDFs. |
 
 ## What is not here, and why
+
+The manuscript itself is not in this repository. It is under submission, and
+the venue's policy on prior public posting governs when and where it appears;
+this repository is the artifact, not the paper.
 
 The raw simulation output is about 78 GB of OMNeT++ `.sca`/`.vec` files and is
 not redistributed. The configurations and campaign drivers that produce it are,
