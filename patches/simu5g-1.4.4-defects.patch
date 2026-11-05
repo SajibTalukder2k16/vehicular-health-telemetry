@@ -1,0 +1,95 @@
+diff --git a/src/simu5g/stack/mac/LteMacEnb.cc b/src/simu5g/stack/mac/LteMacEnb.cc
+index bbbd45a..c9f0b55 100644
+--- a/src/simu5g/stack/mac/LteMacEnb.cc
++++ b/src/simu5g/stack/mac/LteMacEnb.cc
+@@ -719,7 +719,14 @@ bool LteMacEnb::bufferizePacket(cPacket *cpkt)
+ 
+     // obtain the cid from the packet information
+     MacCid cid = ctrlInfoToMacCid(lteInfo.get());
+-    ASSERT(connDescOut_.find(cid) != connDescOut_.end());
++    if (connDescOut_.find(cid) == connDescOut_.end()) {
++        // connection descriptor already removed (e.g. UE handed over):
++        // the packet is lost, do not crash the scheduler
++        EV_WARN << "LteMacEnb::bufferizePacket - no connection descriptor for CID "
++                << cid.str() << ", dropping packet\n";
++        delete pkt;
++        return false;
++    }
+ 
+     OutgoingConnectionInfo& connInfo = connDescOut_.at(cid);
+     LteMacQueue *queue = connInfo.queue;
+diff --git a/src/simu5g/stack/mac/amc/LteAmc.cc b/src/simu5g/stack/mac/amc/LteAmc.cc
+index bb34b28..ec99693 100644
+--- a/src/simu5g/stack/mac/amc/LteAmc.cc
++++ b/src/simu5g/stack/mac/amc/LteAmc.cc
+@@ -492,7 +492,10 @@ bool LteAmc::existTxParams(MacNodeId id, const Direction dir, GHz carrierFrequen
+ 
+     std::map<MacNodeId, unsigned int>& nodeIndex = (dir == DL) ? dlNodeIndex_ : (dir == UL) ? ulNodeIndex_ : d2dNodeIndex_;
+ 
+-    return (*txParams)[carrierFrequency].at(nodeIndex.at(id)).isValid();
++    auto idxIt = nodeIndex.find(id);
++    if (idxIt == nodeIndex.end() || idxIt->second >= (*txParams)[carrierFrequency].size())
++        return false;  // node not registered at this AMC (e.g. mid-handover)
++    return (*txParams)[carrierFrequency].at(idxIt->second).isValid();
+ }
+ 
+ const UserTxParams& LteAmc::setTxParams(MacNodeId id, const Direction dir, UserTxParams& info, GHz carrierFrequency)
+diff --git a/src/simu5g/stack/mac/scheduler/LteSchedulerEnbUl.cc b/src/simu5g/stack/mac/scheduler/LteSchedulerEnbUl.cc
+index a64bb39..13bec81 100644
+--- a/src/simu5g/stack/mac/scheduler/LteSchedulerEnbUl.cc
++++ b/src/simu5g/stack/mac/scheduler/LteSchedulerEnbUl.cc
+@@ -82,6 +82,7 @@ bool LteSchedulerEnbUl::racschedule(GHz carrierFrequency, BandLimitVector *bandL
+         for (const auto& [nodeId, _] : racStatus) {
+             EV << NOW << " LteSchedulerEnbUl::racschedule handling RAC for node " << nodeId << endl;
+ 
++            try {
+             const UserTxParams& txParams = mac_->getAmc()->computeTxParams(nodeId, UL, carrierFrequency);    // get the user info
+             const std::set<Band>& allowedBands = txParams.readBands();
+             BandLimitVector tempBandLim;
+@@ -165,6 +166,13 @@ bool LteSchedulerEnbUl::racschedule(GHz carrierFrequency, BandLimitVector *bandL
+                 std::pair<MacCid, Codeword> scListId = {cid, cw};
+                 scheduleList_[carrierFrequency][scListId] = blocks;
+             }
++            }
++            catch (const std::out_of_range& e) {
++                // node not (or no longer) registered at this eNB's AMC --
++                // stale RAC during handover; skip it, the UE will retry
++                EV_WARN << NOW << " LteSchedulerEnbUl::racschedule - skipping RAC for node "
++                        << nodeId << " (unknown at this eNB, likely mid-handover)" << endl;
++            }
+         }
+ 
+         // clean up all requests
+diff --git a/src/simu5g/stack/phy/channelmodel/LteRealisticChannelModel.cc b/src/simu5g/stack/phy/channelmodel/LteRealisticChannelModel.cc
+index f5aa446..a26ac45 100644
+--- a/src/simu5g/stack/phy/channelmodel/LteRealisticChannelModel.cc
++++ b/src/simu5g/stack/phy/channelmodel/LteRealisticChannelModel.cc
+@@ -2168,13 +2168,13 @@ double LteRealisticChannelModel::computeSubUrbanMacro(double d, double& dbp, boo
+         double a = (a1 < 10) ? a1 : 10;
+         double b = (b1 < 14.72) ? b1 : 14.72;
+         if (d < dbp) {
+-            double first = 20 * log10((40 * M_PI * d * carrierFrequencyHz_) / 3);
++            double first = 20 * log10((40 * M_PI * d * (carrierFrequencyHz_ / 1e9)) / 3);
+             double second = a * log10(d);
+             double fourth = 0.002 * log10(hBuilding_) * d;
+             return first + second - b + fourth;
+         }
+         else
+-            return 20 * log10((40 * M_PI * dbp * carrierFrequencyHz_) / 3)
++            return 20 * log10((40 * M_PI * dbp * (carrierFrequencyHz_ / 1e9)) / 3)
+                    + a * log10(dbp) - b + 0.002 * log10(hBuilding_) * dbp
+                    + 40 * log10(d / dbp);
+     }
+@@ -2213,10 +2213,10 @@ double LteRealisticChannelModel::computeRuralMacro(double d, double& dbp, bool l
+         double a = (a1 < 10) ? a1 : 10;
+         double b = (b1 < 14.72) ? b1 : 14.72;
+         if (d < dbp)
+-            return 20 * log10((40 * M_PI * d * carrierFrequencyHz_) / 3)
++            return 20 * log10((40 * M_PI * d * (carrierFrequencyHz_ / 1e9)) / 3)
+                    + a * log10(d) - b + 0.002 * log10(hBuilding_) * d;
+         else
+-            return 20 * log10((40 * M_PI * dbp * carrierFrequencyHz_) / 3)
++            return 20 * log10((40 * M_PI * dbp * (carrierFrequencyHz_ / 1e9)) / 3)
+                    + a * log10(dbp) - b + 0.002 * log10(hBuilding_) * dbp
+                    + 40 * log10(d / dbp);
+     }

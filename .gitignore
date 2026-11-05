@@ -1,0 +1,45 @@
+# Simulation output. This is what made the previous repository unpushable:
+# ~78 GB of .sca/.vec, plus exported CSVs over GitHub's 100 MB blob limit.
+# Nothing under a results directory belongs in version control.
+results/
+results*/
+*.sca
+*.vec
+*.vci
+*.elog
+
+# Build products
+out/
+*.o
+*.d
+*.so
+*.a
+*_m.cc
+*_m.h
+
+# OMNeT++ / IDE
+.metadata/
+*.launch
+core.*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# LaTeX
+*.aux
+*.bbl
+*.blg
+*.log
+*.out
+*.synctex.gz
+*.fdb_latexmk
+*.fls
+*.toc
+
+# OS / editor
+.DS_Store
+*.swp
+*:Zone.Identifier
