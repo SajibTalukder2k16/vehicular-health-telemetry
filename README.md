@@ -1,8 +1,12 @@
-# Freshness-driven admission control for mixed-criticality vehicular health telemetry
+# From Room to Road: Adapting Edge Traffic for Timely Health Monitoring
 
 Artifact repository for the paper of the same name: the OMNeT++/Simu5G models,
 scenario configurations, campaign drivers and analysis scripts behind every
 number in it.
+
+The contribution it evaluates is an endpoint token-bucket admission controller
+that adapts the camera rate from receiver-confirmed delivery freshness, scored
+against static configurations tuned per route and per individual run.
 
 ## What is here
 
