@@ -43,3 +43,8 @@ venv/
 .DS_Store
 *.swp
 *:Zone.Identifier
+
+# Rendered figures: the scripts are the artifact, the PDFs are build output
+analysis/figures/
+.venv/
+__pycache__/
