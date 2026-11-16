@@ -1,0 +1,84 @@
+diff --git a/src/simu5g/stack/mac/LteMacUe.cc b/src/simu5g/stack/mac/LteMacUe.cc
+index b7f8f38..20ec3aa 100644
+--- a/src/simu5g/stack/mac/LteMacUe.cc
++++ b/src/simu5g/stack/mac/LteMacUe.cc
+@@ -66,6 +66,8 @@ void LteMacUe::initialize(int stage)
+         maxRacBackoff_ = par("racBackoffMax");
+         raRespWinStart_ = par("raResponseWindow");
+         bsrRtxTimerStart_ = par("retxBsrTimer");
++        srPeriod_ = par("srPeriod");
++        srProhibitTimer_ = par("srProhibitTimer");
+     }
+     else if (stage == INITSTAGE_SIMU5G_MAC_SCHEDULER_CREATION) {
+         cellId_ = binder_->getServingNode(nodeId_);
+@@ -513,8 +515,24 @@ void LteMacUe::macPduMake(MacCid cid)
+                 EV << "LteMacUe::macPduMake - BSR with size " << size << " created" << endl;
+             }
+ 
+-            if (bsrAlreadyMade && size > 0)                                              // this prevents the UE from sending an unnecessary RAC request
+-                bsrRtxTimer_ = bsrRtxTimerStart_;
++            if (bsrAlreadyMade && size > 0) {
++                // This gates how soon the UE may re-request uplink resources
++                // when a BSR reported a non-empty buffer. Stock Simu5G gates it
++                // with retxBsrTimer, which makes retxBSR-Timer the ONLY
++                // re-request path because no PUCCH / Scheduling Request is
++                // modelled. 3GPP gives such a UE an SR on PUCCH, prohibited for
++                // at most sr-ProhibitTimer SR periods (TS 36.331 cl. 6.3.2:
++                // sr-ProhibitTimer-r9 INTEGER (0..7), SR periodicity from
++                // sr-ConfigIndex), with retxBSR-Timer (legal minimum sf320) as
++                // the slow backstop -- so stock behaviour is one to two orders
++                // too slow for a sporadic small-packet UE.
++                //
++                // srPeriod == 0 keeps stock behaviour, so results recorded
++                // before this parameter existed reproduce bit-identically.
++                bsrRtxTimer_ = (srPeriod_ > 0)
++                        ? (unsigned int)(srPeriod_ * (srProhibitTimer_ + 1))
++                        : bsrRtxTimerStart_;
++            }
+             else
+                 bsrRtxTimer_ = 0;
+ 
+diff --git a/src/simu5g/stack/mac/LteMacUe.h b/src/simu5g/stack/mac/LteMacUe.h
+index 97569bc..fe655d4 100644
+--- a/src/simu5g/stack/mac/LteMacUe.h
++++ b/src/simu5g/stack/mac/LteMacUe.h
+@@ -63,6 +63,11 @@ class LteMacUe : public LteMacBase
+     unsigned int raRespWinStart_ = 0;
+     unsigned int bsrRtxTimerStart_ = 0;
+ 
++    // Scheduling Request (SR) configuration. See LteMacUe.ned. srPeriod_ == 0
++    // disables the SR path entirely and restores stock Simu5G behaviour.
++    int srPeriod_ = 0;
++    unsigned int srProhibitTimer_ = 0;
++
+     // RAC handling state
+     bool racRequested_ = false;
+     unsigned int racBackoffTimer_ = 0;
+diff --git a/src/simu5g/stack/mac/LteMacUe.ned b/src/simu5g/stack/mac/LteMacUe.ned
+index ae9cd00..8cdb780 100644
+--- a/src/simu5g/stack/mac/LteMacUe.ned
++++ b/src/simu5g/stack/mac/LteMacUe.ned
+@@ -33,5 +33,23 @@ simple LteMacUe extends LteMacBase
+         int racBackoffMax = default(20);       // max random backoff (TTIs) after failed RAC (0 = no backoff, instant retry)
+         int raResponseWindow = default(3);     // ra-ResponseWindow: TTIs to wait before retrying RAC
+         int retxBsrTimer = default(40);        // retxBSR-Timer: BSR retransmission timer (TTIs; 0 = disabled)
++        // ---- Scheduling Request (PUCCH SR), absent from stock Simu5G -------
++        // Stock Simu5G models no PUCCH, so a UE with buffered data and no grant
++        // can only re-request resources via a RAC gated by retxBsrTimer. In
++        // 3GPP that UE raises an SR on PUCCH, prohibited for at most
++        // sr-ProhibitTimer SR periods (TS 36.331 cl. 6.3.2: sr-ProhibitTimer-r9
++        // INTEGER (0..7); SR periodicity derives from sr-ConfigIndex, TS 36.213
++        // Table 10.1.5-1), with retxBSR-Timer -- legal minimum sf320 -- only as
++        // the slow backstop. Gating re-requests on retxBsrTimer therefore
++        // overstates grant re-acquisition latency by one to two orders for
++        // sporadic small-packet traffic.
++        //
++        // srPeriod = 0 DISABLES the SR path and restores stock behaviour
++        // exactly; that is the default on purpose, so existing result sets keep
++        // their meaning. Set srPeriod to the SR periodicity in TTIs (ms) to
++        // model the SR path; the re-request gate then becomes
++        // srPeriod * (srProhibitTimer + 1) TTIs.
++        int srPeriod = default(0);             // SR periodicity in TTIs; 0 = no SR modelled (stock Simu5G)
++        int srProhibitTimer = default(0);      // sr-ProhibitTimer, in SR periods (3GPP range 0..7)
+ }
+ 

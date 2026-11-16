@@ -31,7 +31,7 @@ spend 2,160 runs trying to falsify.
 | `analysis/*/` | **Verified extracts of the four campaigns.** These are what make the paper reproducible without the raw corpus; see below. |
 | `analysis/figures_src/figC*.py` | The paper's five figures. Each recomputes its own numbers from the extracts and prints them on every render, so a caption cannot drift from its data. `figC4` additionally asserts the three counts that would refute Propositions 1–3 and fails the build if any is non-zero. |
 | `docs/` | The result documents the paper cites, the parameter provenance register, and the claim-to-evidence map. |
-| `patches/` | A diff against Simu5G tag `v1.4.4` for the three defects described in `docs/SIMU5G_PATCHES.md`. |
+| `patches/` | **Two** diffs against Simu5G tag `v1.4.4`. `simu5g-1.4.4-defects.patch` carries the three defect fixes in `docs/SIMU5G_PATCHES.md`. `simu5g-scheduling-request.patch` **adds a mechanism the release does not model** — a PUCCH Scheduling Request path — and is required to reproduce these results; see below. |
 
 ## Reproducing the paper's tables
 
@@ -159,13 +159,30 @@ second and replayed; `tools/fcd2bonnmotion.py` does that conversion.
 ```sh
 # with a Simu5G 1.4.4 checkout at ../Simu5G
 git -C ../Simu5G apply /path/to/patches/simu5g-1.4.4-defects.patch
+git -C ../Simu5G apply /path/to/patches/simu5g-scheduling-request.patch
 source /path/to/omnetpp-6.4.0/setenv -q
 cd src && make
 ```
 
-The patch is required: without the path-loss fix the rural line-of-sight links
-carry no traffic at all, silently, so the rural scenarios produce zero delivery
-with no error.
+**Apply both.** The defect patch is required because without the path-loss fix
+the rural line-of-sight links carry no traffic at all, silently, so the rural
+scenarios produce zero delivery with no error.
+
+The scheduling-request patch is required for a different and more important
+reason: it is not a bug fix but a **missing mechanism we supplied**. Stock
+Simu5G models no PUCCH and no Scheduling Request, so a UE with an empty buffer
+can only re-acquire a grant via RACH/BSR gated by `retxBsrTimer` — whose LTE
+default of 40 subframes is not a standards-legal value, and whose legal values
+are all worse. The result is a 320 ms floor on the empty-buffer alert tail that
+real LTE does not have. The patch adds the SR path (46 lines, parameters from
+TS 36.213 Table 10.1.5-1 and TS 36.331 cl. 6.3.2); every campaign here runs it
+at `srPeriod = 5`, `srProhibitTimer = 0`. `srPeriod = 0` is the default and
+restores stock behaviour exactly.
+
+**A reproduction that applies only the defect patch will not obtain these
+results.** `docs/PARAMETER_PROVENANCE.md` §A.4 records the diagnosis, the
+measured timer sweep, and the primary-source ASN.1 the parameter ranges come
+from.
 
 **Nothing above needs the simulator.** The analysis and figure commands run
 against the committed extracts on a clean checkout.
