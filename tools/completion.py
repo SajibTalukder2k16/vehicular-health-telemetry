@@ -20,16 +20,23 @@ THE THREE-WAY CLASSIFICATION
 
     COMPLETE  every expected chunk arrived -> readiness is well defined, and
               equals max(alert, slowest chunk)
-    CENSORED  incomplete AND it is the LAST escalation of its run -> the
-              simulation horizon cut the burst off in flight. This is a
-              measurement boundary, not a system failure, and it must not be
-              counted as either a success or a loss.
-    LOST      incomplete and NOT last -> the run continued past it, so the
-              missing chunks are genuinely missing.
+    CENSORED  incomplete AND it was not observed long enough to complete:
+              creation + T_obs > the run's horizon, where T_obs is the
+              slowest observed completion among COMPLETE escalations in the
+              same cell. The outcome is unresolved, not a failure.
+    LOST      incomplete and observed past T_obs -> the chunks are missing.
 
-  The discriminator is sound because horizon truncation can affect at most one
-  burst per run, which is the argument VERIFICATION_FRONTIER.md section 4 uses
-  for the aggregate deficit. Here it is applied per escalation.
+  CORRECTED 2026-11-17 after external review. The first rule censored any
+  incomplete burst that was simply the LAST escalation of its run. Being last
+  does not mean the horizon interrupted it -- a final escalation can fall well
+  before the end and lose packets outright -- and the rule inflated completion
+  badly where runs carry few escalations. In CondHealthy, ~1.2 escalations per
+  run, "last" was usually the only one. Under the corrected rule E4 completion
+  falls from 88.6/78.5/79.1/68.5 % to 83.8/73.6/74.5/51.4 %, and censoring
+  nearly vanishes: most incompletes are genuine loss, not truncation.
+
+  Because the rule only relabels INCOMPLETE escalations, every latency
+  statistic conditioned on completion is unchanged by this correction.
 
 WHAT TO REPORT, AND WHY BOTH
   Neither number alone is honest, and this tool prints both:
@@ -85,6 +92,12 @@ def load(path):
     return per
 
 
+# sim-time-limit per condition, set by the length of the route each mobility
+# trace covers. These bound the observation window.
+HORIZON = {"CondHealthy": 320.0, "CondCongested": 1369.0,
+           "CondTransient": 1369.0, "CondOutage": 680.0}
+
+
 def classify(per, arm, cond, exp):
     """-> (complete, censored, lost, [gap among complete])
 
@@ -95,19 +108,29 @@ def classify(per, arm, cond, exp):
     the wrong arm's completion. Passing the number in removes the class of
     bug, not just the instance.
     """
-    comp = cens = lost = 0
-    gaps = []
+    # pass 1: find the complete bursts and the slowest observed completion
+    runs = []
+    done = []
     for (c, a, s), (al, ch) in per.items():
         if c != cond or a != arm or not ch:
             continue
-        keys = sorted(ch)
-        last = keys[-1]
-        full = {}
-        for t in keys:
-            if exp is None or len(ch[t]) >= exp:
+        full = {t: v for t, v in ch.items()
+                if exp is None or len(v) >= exp}
+        runs.append((al, ch, full))
+        done += [max(v) for v in full.values()]
+    if not runs:
+        return 0, 0, 0, []
+    t_obs = max(done) if done else 0.0
+    horizon = HORIZON.get(cond, float("inf"))
+
+    # pass 2: classify, censoring only what could not have been seen complete
+    comp = cens = lost = 0
+    gaps = []
+    for al, ch, full in runs:
+        for t in sorted(ch):
+            if t in full:
                 comp += 1
-                full[t] = ch[t]
-            elif t == last:
+            elif t + t_obs > horizon:
                 cens += 1
             else:
                 lost += 1

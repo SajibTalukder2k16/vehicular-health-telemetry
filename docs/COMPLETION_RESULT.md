@@ -34,11 +34,24 @@ consistent with each rung's byte size: **E1 = 1, E2 = 3, E3 = 41, E4 = 99.**
 | class | test | meaning |
 |---|---|---|
 | **complete** | every expected chunk arrived | readiness is defined |
-| **censored** | incomplete **and** last escalation of its run | the horizon cut the burst off in flight — a measurement boundary, neither success nor failure |
-| **lost** | incomplete and not last | the run continued past it, so the chunks are genuinely missing |
+| **censored** | incomplete **and** `creation + T_obs > horizon` | not observed long enough to complete; outcome unresolved |
+| **lost** | incomplete and observed past `T_obs` | the chunks are genuinely missing |
 
-The discriminator is the one `VERIFICATION_FRONTIER.md` §4 uses in aggregate —
-truncation can affect at most one burst per run — applied per escalation.
+`T_obs` is the slowest observed completion among **complete** escalations in
+the same cell; horizons are the per-condition `sim-time-limit` (320 / 1369 /
+1369 / 680 s).
+
+> ⚠ **CORRECTED 2026-11-17, second external review.** The first rule censored
+> any incomplete burst that was merely the **last** escalation of its run.
+> Being last does not mean the horizon interrupted it — a final escalation can
+> fall well before the end and lose packets outright — and the rule inflated
+> completion badly where runs carry few escalations. CondHealthy averages ~1.2
+> escalations per run, so "last" was usually the *only* one. **E4 completion
+> falls from 88.6 / 78.5 / 79.1 / 68.5 % to 83.8 / 73.6 / 74.5 / 51.4 %.**
+> Censoring nearly vanishes: almost every incomplete burst is genuine loss.
+>
+> Because the rule only relabels **incomplete** escalations, every latency
+> statistic conditioned on completion is unchanged.
 
 ---
 
@@ -49,12 +62,15 @@ Completion rate = complete / (complete + lost); censored excluded.
 | rung | Healthy | Congested | Transient | Outage |
 |---|---|---|---|---|
 | E1 (512 B) | 100.0 % | 100.0 % | 100.0 % | 100.0 % |
-| E2 (3.5 KiB) | 97.1 % | 91.5 % | 92.6 % | 95.5 % |
-| E3 (56 KiB) | 88.2 % | 83.3 % | 91.6 % | 80.0 % |
-| **E4 (138 kB)** | **88.6 %** | **78.5 %** | **79.1 %** | **68.5 %** |
+| E2 (3.5 KiB) | 94.3 % | 90.9 % | 90.6 % | 87.5 % |
+| E3 (56 KiB) | 81.1 % | 79.9 % | 86.3 % | 61.1 % |
+| **E4 (138 kB)** | **83.8 %** | **73.6 %** | **74.5 %** | **51.4 %** |
 
-> **At E4, between 11 % and 31 % of escalations never become ready at all.**
-> In a coverage outage, nearly a third. This is a larger consequence of
+Note the decline is not monotone everywhere: Healthy reads 81.1 % at E3 and
+83.8 % at E4, a difference well inside what 37 escalations resolve.
+
+> **At E4, between 16 % and 49 % of escalations did not become ready within
+> the observation window.** In a coverage outage, close to half. This is a larger consequence of
 > evidence volume than the dispatch gap, and the paper does not currently
 > report it.
 

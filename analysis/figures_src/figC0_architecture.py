@@ -216,7 +216,11 @@ def main():
     txt(75.0, 15.5, r'$G$', size=6.0, ha='left')
 
     txt(50, 6.6, r'$T_{\mathrm{dispatch}} = \max(T_{\mathrm{alert}},'
-                 r'\, T_{\mathrm{verify}})$, against a 4 s budget',
+                 # NOT "budget": TS 122 101 A.27.2 measures its 4 s from
+                 # end-to-end connection establishment and says "should
+                 # typically". The paper uses 4 s as a STUDY-DEFINED
+                 # threshold on total readiness, so the figure says so.
+                 r'\, T_{\mathrm{verify}})$, vs a study-defined 4 s',
         size=5.4)
 
     fig.subplots_adjust(left=0.004, right=0.996, top=0.998, bottom=0.002)
