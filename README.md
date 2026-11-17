@@ -147,8 +147,23 @@ and is not redistributed either. `docs/TOWER_DATA.md` records its provenance,
 and the resulting eNodeB coordinates are in the `towers_*.ini` files, so the
 scenarios run without it.
 
-The repository carries no licence yet. Until one is added, no permissions
-beyond viewing are granted.
+## Licence
+
+Not one licence, because this repository is not all one thing. `LICENSE` and
+`NOTICE` give the boundary exactly; in short:
+
+| | |
+|---|---|
+| `src/`, `tools/`, `analysis/figures_src/`, `simulations/` | **MIT** — the models and scripts written for this work |
+| `patches/*.patch` | **LGPL** — diffs against Simu5G are derivative works of it, and carry its licence. The MIT grant does not reach them. |
+| `docs/`, the `.csv.gz` extracts | **CC BY 4.0** — measurements and prose, attributed to the paper |
+
+OMNeT++, INET and Simu5G are **not** redistributed here and come under their
+own terms; OMNeT++ in particular is under an Academic Public License with a
+separate commercial licence, and obtaining the right one for your use is your
+responsibility. Simu5G's own licence further notes that implementing 3GPP
+specifications may involve patented technology — a notice that applies to the
+patches here as much as to Simu5G itself.
 
 ## Building
 

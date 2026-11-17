@@ -1,0 +1,72 @@
+NOTICE — what is covered by LICENSE, and what is not
+====================================================
+
+The MIT licence in LICENSE covers the work the authors of this repository
+wrote. It does not and cannot cover everything here, because part of this
+repository is derived from software under a different licence. This file
+records the boundary precisely, so that nobody has to guess at it.
+
+
+1. MIT (LICENSE)
+----------------
+
+  src/                 the simulation models written for this work: the edge
+                       aggregator and its admission gate, the health server,
+                       the sensor rig, and the BLE / wired / WLAN sensor-link
+                       models
+  tools/               campaign drivers and analysis scripts
+  analysis/figures_src/  figure scripts
+  simulations/         scenario configurations
+
+These are new modules written against the OMNeT++, INET and Simu5G APIs. They
+are separate works that build and link against those frameworks; they do not
+contain their code.
+
+
+2. LGPL — derivative of Simu5G (NOT MIT)
+----------------------------------------
+
+  patches/simu5g-1.4.4-defects.patch
+  patches/simu5g-scheduling-request.patch
+
+Both files are diffs against Simu5G 1.4.4 and are therefore derivative works
+of Simu5G, which is released under the LGPL (see the Simu5G distribution's
+LICENSE.md). They are offered under the same terms as Simu5G, and the MIT
+grant above does not extend to them. Applying either patch produces modified
+Simu5G source, which remains under Simu5G's licence.
+
+
+3. CC BY 4.0 — documentation and derived data
+---------------------------------------------
+
+  docs/                method, provenance and result documents
+  analysis/*/*.csv.gz  the verified extracts of the simulation campaigns
+  analysis/*/README.md
+
+Offered under Creative Commons Attribution 4.0 International. Attribute to the
+paper. These are measurements and prose rather than software, and the MIT
+licence is a poor fit for them; CC BY asks only that the source be credited.
+
+
+4. Third-party software this repository does NOT redistribute
+-------------------------------------------------------------
+
+Running anything here requires software obtained separately, under its own
+terms, and none of it is included:
+
+  OMNeT++ 6.4.0   Academic Public License, with a separate commercial licence
+                  available. You are responsible for obtaining the licence
+                  appropriate to your use. See https://omnest.com/
+  INET 4.7.0      LGPL
+  Simu5G 1.4.4    LGPL. Its LICENSE.md also notes that Simu5G implements 3GPP
+                  specifications, which may involve patented technology, and
+                  that determining whether your use requires further licences
+                  is your responsibility. That notice applies equally to the
+                  patches in this repository and to any model built on them.
+
+The third-party cell-location extract referred to in docs/TOWER_DATA.md is not
+redistributed; only the derived eNodeB coordinates in the scenario files are.
+
+
+Questions about reuse that this file does not answer should go to the
+corresponding author rather than being resolved by assumption.
