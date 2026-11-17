@@ -124,13 +124,13 @@ LIM = 1.04
 ax.fill_between([0, LIM], [0, LIM], [LIM, LIM], color="#f2efe9", zorder=0, lw=0)
 ax.plot([0, LIM], [0, LIM], color=INK, lw=1.0, zorder=2)
 ax.axhline(0, color=INK, lw=1.0, zorder=2)
-ax.annotate("penalty = the bound $(B-b)/r$", xy=(0.995, 0.995), xytext=(-2, 3),
+ax.annotate("fluid-model reference $(B-b)/r$", xy=(0.995, 0.995), xytext=(-2, 3),
             textcoords="offset points", fontsize=FS - 1.2, color=INK,
             rotation=45, rotation_mode="anchor", ha="right", va="bottom")
-ax.text(0.56, 0.93, "Prop 3 predicts no cell here:\npenalty exceeds its bound",
+ax.text(0.56, 0.93, "above the fluid-model\nrelease-time reference",
         fontsize=FS - 1.2, color=INK2, ha="center", va="center",
         style="italic", linespacing=1.2)
-ax.text(1.02, -0.055, "Prop 2 predicts no cell here: median penalty below zero",
+ax.text(1.02, -0.055, "median penalty below zero", 
         fontsize=FS - 1.2, color=INK2, ha="right", va="center", style="italic")
 
 rows = []
@@ -165,7 +165,7 @@ if inh:
 
 ax.set_xlim(-0.035, LIM)
 ax.set_ylim(-0.085, LIM)
-ax.set_xlabel("derived bound on the penalty, $(B-b)/r$   (s)", fontsize=FS,
+ax.set_xlabel("fluid-model release-time reference, $(B-b)/r$   (s)", fontsize=FS,
               color=INK, labelpad=1.5)
 ax.set_ylabel("measured penalty   (s)", fontsize=FS, color=INK)
 ax.tick_params(labelsize=FS - 0.5, colors=INK2, length=0)
