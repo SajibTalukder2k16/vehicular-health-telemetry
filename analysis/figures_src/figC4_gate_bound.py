@@ -19,7 +19,16 @@ THE CLAIM, AND WHY THIS FORM
 
   x = 0 is the POSITIVE CONTROL: b = 256 KiB exceeds the E4 burst, so Prop 1
   says the gate cannot engage and the bound is identically zero. Those twelve
-  cells must sit exactly at the origin, and do.
+  cells must sit exactly at the origin, and do -- with completion identical to
+  the no-gate baseline, which is the stronger check.
+
+  WHAT THIS FIGURE DOES NOT SHOW (added 2026-11-17, second review). The
+  penalties plotted are CELL MEDIANS conditioned on completion. Individual
+  paired escalations move in both directions -- 22.6 % complete sooner under
+  the inherited gate -- so the triangle is a statement about medians, not a
+  universal bound. It also says nothing about the completeness cost: where the
+  gate engages it reduces the fraction of escalations that complete at all,
+  which is in the results table and not here.
 
 PRINT / GRAYSCALE
   Four validated hues (#2a78d6/#eb6834/#1baf7a/#6250d6; all six checks pass,
@@ -92,17 +101,20 @@ fig.patch.set_facecolor(SURFACE)
 ax.set_facecolor(SURFACE)
 
 LIM = 1.04
-# the forbidden half-planes: above the bound (Prop 3) and below zero (Prop 2)
+# The half-planes the DERIVATION excludes. "Forbidden" overstates it: these
+# are regions a fluid model of the bucket rules out for a cell median, not
+# regions physically unreachable -- individual escalations do land below
+# zero (section V-D). Labelled as predictions, which is what they are.
 ax.fill_between([0, LIM], [0, LIM], [LIM, LIM], color="#f2efe9", zorder=0, lw=0)
 ax.plot([0, LIM], [0, LIM], color=INK, lw=1.0, zorder=2)
 ax.axhline(0, color=INK, lw=1.0, zorder=2)
 ax.annotate("penalty = the bound $(B-b)/r$", xy=(0.995, 0.995), xytext=(-2, 3),
             textcoords="offset points", fontsize=FS - 1.2, color=INK,
             rotation=45, rotation_mode="anchor", ha="right", va="bottom")
-ax.text(0.56, 0.93, "forbidden by Prop 3:\npenalty cannot exceed the bound",
+ax.text(0.56, 0.93, "Prop 3 predicts no cell here:\npenalty exceeds its bound",
         fontsize=FS - 1.2, color=INK2, ha="center", va="center",
         style="italic", linespacing=1.2)
-ax.text(1.02, -0.055, "forbidden by Prop 2: penalty cannot be negative",
+ax.text(1.02, -0.055, "Prop 2 predicts no cell here: median penalty below zero",
         fontsize=FS - 1.2, color=INK2, ha="right", va="center", style="italic")
 
 rows = []
