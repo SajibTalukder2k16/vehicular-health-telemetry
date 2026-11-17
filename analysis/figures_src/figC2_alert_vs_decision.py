@@ -10,10 +10,14 @@ THE CLAIM, AND WHY IT NEEDS A FIGURE
   to two orders of magnitude.
 
   In CondOutage the alert actively gets faster -- 1.0071 s at no evidence down
-  to 0.1376 s at E3, 0.3704 s at E4 -- while the gap goes from 0 to 1.8700 s.
-  (1.1110 s is the E3 gap, not the ladder's end; an earlier draft of this
-  docstring quoted it as the end.) That single panel is the clearest statement
-  of C2' in the paper.
+  to 0.1376 s at E3, 0.3704 s at E4 -- while the gap climbs to 0.4020 s.
+
+  THE GAP SERIES IS CONDITIONAL ON COMPLETION (changed 2026-11-16). Readiness
+  is undefined for an escalation that never received its whole burst, so the
+  gap is a median among complete escalations. It is therefore optimistic: the
+  bursts that lost chunks were the ones the radio treated badly. The companion
+  number -- what fraction completed at all -- is in the results table, and the
+  two belong together. The alert series is NOT conditioned; see stats().
 
 THE FORM
   Two measures, both in SECONDS, so they may share one axis honestly -- this is
@@ -86,12 +90,29 @@ def load(path, tol=1e-2):
 GA = load(os.path.join(ROOT, "analysis/escalation_vec/escalation_latencies.csv.gz"))
 
 
+# Chunks per complete burst, by rung. The gap is undefined for an escalation
+# whose evidence never completed, so the gap series is conditional on
+# completion -- and the ALERT series deliberately is not, because an alert's
+# arrival does not depend on its evidence completing and conditioning it would
+# import survivorship bias into the one claim that must not carry it.
+EXPECTED = {"ref": 0, "e1": 1, "e2": 3, "e3": 41, "e4": 99}
+
+
 def stats(cond, arm):
-    rows = [r for (c, m, _), rr in GA.items() if c == cond and m == arm for r in rr]
-    if not rows:
+    """-> (median alert over ALL escalations, median gap over COMPLETE ones)"""
+    alerts, gaps = [], []
+    exp = EXPECTED[arm]
+    for (c, m, _), rr in GA.items():
+        if c != cond or m != arm:
+            continue
+        for r in rr:
+            alerts.append(r[0])
+            if r[2] >= exp:
+                gaps.append(r[1] - r[0])
+    if not alerts:
         return float("nan"), float("nan")
-    return (statistics.median(r[0] for r in rows),
-            statistics.median(r[1] - r[0] for r in rows))
+    return (statistics.median(alerts),
+            statistics.median(gaps) if gaps else float("nan"))
 
 
 # ===== FIGURE ================================================================

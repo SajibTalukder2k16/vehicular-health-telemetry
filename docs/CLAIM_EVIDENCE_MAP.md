@@ -65,8 +65,11 @@ used, still labelled **X**; the measured rPPG cost falls between them.
 |---|---|---|---|---|
 | 2.1 | C2 as written is **refuted**: the burst does not delay the alert in **0 of 16** cells, and the sign reverses in 4 | 600 runs | **M** | GATE_A |
 | 2.2 | The alert gets *faster* as evidence grows — CondOutage 1.0071 → 0.3704 s | 600 runs | **M** | VF §2 |
-| 2.3 | The decision does not: the gap grows 1–2 orders of magnitude over the same ladder | 600 runs | **M** | VF §2 |
+| 2.3 | The decision does not: the gap grows 1–2 orders of magnitude over the same ladder, to **0.4020 s** in CondOutage **among complete escalations** | 600 runs | **M** | VF §2, COMPLETION §4 |
 | 2.4 | Dispatch must be referred to the **sensor instant**; the two delay signals sit on different clocks | derivation + fix | **D** | EDGE §1 |
+
+| 2.5 | **NEW, primary.** Under a full-evidence policy, **11–31 % of escalations never become ready** at E4 (completion 88.6 / 78.5 / 79.1 / 68.5 %). Byte-completeness of 99 % hid this: a burst is 99 chunks | 600 + 2,160 runs | **M** | COMPLETION §3, §5a |
+| 2.6 | At `cameraMaxAge = 0.5 s`, **0 of 393 escalations complete** (max burst 91 of 99 chunks) while dispatch latency *improves* 11 %. The sharpest form of the paper's methodological warning | 2,160 runs | **M** | COMPLETION §5a |
 
 **Figure F2 — one table, two columns, opposite directions.** Alert delay and
 dispatch gap against the ladder, four conditions. The whole of C2′ is visible in
@@ -84,8 +87,8 @@ log axis (not a dual axis). Alert ratio over the ladder by condition:
 |---|---|---|---|---|
 | 3.1 | Gap by rung: E1 ≈ 0 → E2 0.004–0.028 → E3 0.128–1.111 → E4 0.233–1.870 s | 600 runs | **M** | VF §2 |
 | 3.2 | The E2→E3 step is **13–40×** | 600 runs | **M** | VF §2 |
-| 3.3 | The gap is **linear in bytes** — slope 0.95–1.21, R² ≥ 0.976; no knee, no free region. *Corrected 2026-11-12; the previous "modality step, sublinear" claim was a per-run-max artefact* | 600 + 480 runs | **M** | VF §3 |
-| 3.4 | At LF/HF-grade W (≥120 s ⇒ 14.4 kB) verification costs **3.2–9.0× less than one JPEG** | 480 runs | **M** | PHASE2 §1 |
+| 3.3 | The gap is **proportional to bytes over the three sizes tested** — slope 0.81–1.16, R² ≥ 0.961. *Corrected twice: the "modality step, sublinear" claim was a per-run-max artefact (2026-11-12), and the slopes were refitted on complete escalations only (2026-11-16). Three sizes cannot exclude a knee* | 600 + 480 runs | **M** | VF §3, COMPLETION §5 |
+| 3.4 | At LF/HF-grade W (≥120 s ⇒ 14.4 kB) verification costs **2.6–4.2× less than one JPEG** among complete escalations (was 3.2–9.0× over the unconditional mixture). Its *completion* rate, 83.9–93.8 %, is not better than the image's 80.0–91.6 % | 480 runs | **M** | PHASE2 §1, COMPLETION §5 |
 | 3.5 | Budget misses against eCall's **4 s** (TS 122 101 A.27.2) | 600 + 480 runs | **M** | PROV §A.6 |
 | 3.6 | The rule survives a 50–190× change in edge cost: **20 of 20** cells, 2.0–22.7× | 960 runs | **M** | EDGE §3 |
 

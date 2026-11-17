@@ -77,6 +77,26 @@ projected onto the four counters the sweep actually reads — 27 KB, which is
 what keeps this repository clonable. Both are accepted; the small one is
 preferred when present.
 
+### Readiness requires the whole burst
+
+`tools/completion.py` is the one to run before trusting any latency number
+here. Under the policy the paper models, an escalation missing any chunk never
+becomes ready, so every gap figure is a median among **complete** escalations
+and is therefore survivorship-biased — the bursts that lost chunks were the
+ones the radio treated badly. The completion rate belongs beside every such
+figure.
+
+```sh
+python3 -I tools/completion.py                                   # Gate A
+python3 -I tools/completion.py --expect 99 analysis/gate/escalation_latencies.csv.gz
+```
+
+An earlier version of this analysis reported completeness as a fraction of
+**bytes**, which is a different and much more flattering quantity: a burst at
+E4 is 99 chunks, so 99 % of bytes arriving is consistent with most bursts
+being incomplete. `docs/COMPLETION_RESULT.md` records what changed and by how
+much.
+
 ### A caution carried over from the analysis
 
 `dispatch_times.py` pairs each evidence burst to its escalation on a signed
@@ -99,6 +119,7 @@ here in the same commit.
 | **C1** — the eight capacity constraints | `analysis/figures_src/figC1_three_walls.py` (derived; prints every ratio) |
 | **C1** — the compute wall's queueing consequence | `tools/edge_contrasts.py`, `docs/EDGE_COST_RESULT.md` §2 |
 | **C2′** — alert vs dispatch over the ladder | `tools/dispatch_times.py`, `analysis/figures_src/figC2_alert_vs_decision.py` |
+| **Completion** — the fraction of escalations that ever become ready | `tools/completion.py`, `docs/COMPLETION_RESULT.md` |
 | **C3** — the verification frontier and its slopes | `analysis/figures_src/figC3_frontier.py` |
 | **C3** — the waveform rung at LF/HF-grade *W* | `tools/dispatch_times.py` on `analysis/phase2/` |
 | **C3** — invariance to edge cost | `tools/edge_contrasts.py` |

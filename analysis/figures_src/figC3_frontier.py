@@ -16,8 +16,17 @@ WHAT THIS FIGURE HAD TO UNLEARN
 THE FORM
   Four conditions must be told apart over a continuous x, so: multi-line,
   categorical colour, log-log. A slope-1 guide makes linearity readable
-  directly -- parallel to the guide IS the claim. The 4 s eCall budget is a
-  horizontal reference.
+  directly -- parallel to the guide IS the claim.
+
+  NO THRESHOLD LINE. This figure used to carry a horizontal "4 s eCall
+  budget". It was wrong twice over and was removed on 2026-11-16 after an
+  external review caught it. ETSI TS 122 101 cl. A.27.2 measures its 4 s
+  from the moment the end-to-end connection with the PSAP is established,
+  not from the triggering event; and the y axis here is the GAP, which
+  itself starts at alert arrival. Drawing one clock's threshold across
+  another clock's interval invites exactly the comparison it should not.
+  The study-defined 4 s threshold now appears only against TOTAL readiness
+  time, in the results table, where the clocks agree.
 
 PRINT / GRAYSCALE
   Four validated hues (#2a78d6/#eb6834/#1baf7a/#6250d6: all six checks pass,
@@ -66,7 +75,6 @@ SERIES = [  # condition, hue, dash, marker, display name
 ]
 RUNGS = [("e1", 512, "E1"), ("e2", 3584, "E2"), ("e2b", 14400, "E2$'$"),
          ("e3", 57344, "E3"), ("e4", 138000, "E4")]
-BUDGET = 4.0        # s, eCall MSD-to-PSAP, ETSI TS 122 101 cl. A.27.2
 
 
 def load(path, tol=1e-2):
@@ -87,9 +95,21 @@ GA = load(os.path.join(ROOT, "analysis/escalation_vec/escalation_latencies.csv.g
 P2 = load(os.path.join(ROOT, "analysis/phase2/escalation_latencies.csv.gz"))
 
 
+# Chunks per complete burst, by rung. Readiness is undefined for an
+# escalation that never received its whole burst, so the frontier is plotted
+# among COMPLETE escalations. That makes every point optimistic -- the bursts
+# that lost chunks were the ones the radio treated badly -- and the completion
+# rate that belongs beside it is in the results table. Changed 2026-11-16;
+# before that this plotted a median over a mixture in which incomplete bursts
+# contributed an understated value.
+EXPECTED = {"e1": 1, "e2": 3, "e2b": 11, "e3": 41, "e4": 99}
+
+
 def gap(cond, arm):
     src = P2 if arm == "e2b" else GA
-    rows = [r for (c, m, _), rr in src.items() if c == cond and m == arm for r in rr]
+    exp = EXPECTED[arm]
+    rows = [r for (c, m, _), rr in src.items() if c == cond and m == arm
+            for r in rr if r[2] >= exp]
     return statistics.median(r[1] - r[0] for r in rows) if rows else float("nan")
 
 
@@ -132,12 +152,6 @@ ax.annotate("slope 1 = linear in bytes", xy=(138000, anchor * 138000 / gx[0]),
             xytext=(1, -7), textcoords="offset points", fontsize=FS - 1.1,
             color=INK2, ha="right", va="top", zorder=5)
 
-# the budget
-ax.axhline(BUDGET, color=INK, lw=0.9, ls=(0, (5, 2)), zorder=2)
-ax.annotate("4 s eCall budget", xy=(560, BUDGET), xytext=(0, 3),
-            textcoords="offset points", fontsize=FS - 0.8, color=INK,
-            ha="left", va="bottom", zorder=5)
-
 ax.set_xscale("log")
 ax.set_yscale("log")
 ax.set_xlim(350, 900000)
@@ -174,8 +188,14 @@ print(f"{'condition':15s}" + "".join(f"{lab:>10s}" for _, _, lab in RUNGS)
       + f"{'slope':>8s}{'R2':>7s}")
 for cond, _, _, _, name in SERIES:
     ys = [gap(cond, a) for a, _, _ in RUNGS]
-    lx = [math.log(b) for (a, b, _), y in zip(RUNGS, ys) if y > 0 and a != "e1"]
-    ly = [math.log(y) for (a, _, _), y in zip(RUNGS, ys) if y > 0 and a != "e1"]
+    # Fit on E2/E3/E4 only. E1 is excluded because its gap is ~0, and E2'
+    # because it comes from the OTHER campaign -- it is plotted, since it is
+    # the rung the design rule is about, but mixing corpora inside one
+    # regression would make the slope unattributable. The paper quotes this
+    # three-point fit, so the two cannot disagree.
+    FIT = {"e2", "e3", "e4"}
+    lx = [math.log(b) for (a, b, _), y in zip(RUNGS, ys) if y > 0 and a in FIT]
+    ly = [math.log(y) for (a, _, _), y in zip(RUNGS, ys) if y > 0 and a in FIT]
     mx, my = sum(lx)/len(lx), sum(ly)/len(ly)
     sl = sum((x-mx)*(y-my) for x, y in zip(lx, ly))/sum((x-mx)**2 for x in lx)
     ic = my - sl*mx
