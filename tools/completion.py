@@ -153,11 +153,40 @@ def fit(xs, ys):
     return m, (1 - ss / st if st else float("nan"))
 
 
+def emitted_bursts(path, cond, arm, chunks_per_burst):
+    """Emitted bursts for a cell, from the campaign's own emission counter.
+
+    This is the honest denominator. Counting only bursts with at least one
+    chunk received silently drops the escalations where NOTHING arrived --
+    the total failures, which are exactly the cases that matter most. In the
+    gate campaign up to six per cell were emitted and never observed.
+
+    Only the gate campaign ships an emission counter, so elsewhere the tool
+    falls back to observed bursts and labels the column accordingly.
+    """
+    total = 0.0
+    with gzip.open(path, "rt", newline="") as fh:
+        rd = csv.reader(fh)
+        h = {n: i for i, n in enumerate(next(rd))}
+        ic, ia, inm, ifl, iv = (h["condition"], h["arm"], h["name"],
+                                h["field"], h["value"])
+        for row in rd:
+            if (row[ic] == cond and row[ia] == arm
+                    and row[inm] == "evidenceChunksEmitted" and not row[ifl]):
+                total += float(row[iv])
+    return total / chunks_per_burst
+
+
 def main():
     # The gate corpus names its arms by POLICY (none, p64k1, dp05...) and runs
     # every one of them at E4, so the rung cannot be read off the arm name.
     # --expect N sets the expected chunk count for all arms.
     argv = sys.argv[1:]
+    emitted_src = None
+    if "--emitted" in argv:
+        i = argv.index("--emitted")
+        emitted_src = argv[i + 1]
+        del argv[i:i + 2]
     force = None
     if "--expect" in argv:
         i = argv.index("--expect")
@@ -172,9 +201,10 @@ def main():
         print("=" * 76)
         print(f"corpus: {path}")
         print("=" * 76)
-        print(f"{'arm':4s} {'condition':14s} {'esc':>5s} {'compl':>6s} "
-              f"{'cens':>5s} {'lost':>5s} {'completion':>11s} "
-              f"{'gap|complete':>13s}")
+        denom_label = "emitted" if emitted_src else "observed"
+        print(f"{'arm':4s} {'condition':14s} {'obs':>4s} {'emit':>5s} "
+              f"{'compl':>6s} {'unres':>6s} "
+              f"{'completion/' + denom_label:>20s} {'gap|complete':>13s}")
         print("-" * 76)
         summary = {}
         for arm in arms:
@@ -185,12 +215,15 @@ def main():
                 n = comp + cens + lost
                 if not n:
                     continue
-                denom = comp + lost
+                if emitted_src:
+                    denom = emitted_bursts(emitted_src, cond, arm, exp)
+                else:
+                    denom = comp + lost
                 rate = comp / denom if denom else float("nan")
                 med = statistics.median(gaps) if gaps else float("nan")
                 summary[(arm, cond)] = (rate, med)
-                print(f"{arm:4s} {cond:14s} {n:5d} {comp:6d} {cens:5d} "
-                      f"{lost:5d} {100*rate:10.1f}% {med:13.4f}")
+                print(f"{arm:4s} {cond:14s} {n:4d} {denom:5.0f} "
+                      f"{comp:6d} {cens:6d} {100*rate:19.1f}% {med:13.4f}")
             print()
 
         print("COMPLETION RATE is the primary figure for a full-evidence "
