@@ -91,9 +91,25 @@ def load(path, tol=1e-2):
 G = load(os.path.join(ROOT, "analysis/gate/escalation_latencies.csv.gz"))
 
 
+# Chunks in a complete E4 burst. The gap is undefined for an escalation whose
+# evidence never completed, so the penalty plotted here is conditioned on
+# completion and must match Table "sweep" exactly. An earlier version of this
+# script plotted the UNCONDITIONAL median while the table had moved to the
+# conditional one; the figure and the table then disagreed (0.8082 vs 0.8110 at
+# the maximum), which an external reviewer caught. Changing the caption alone
+# did not fix it -- the computation had to change too.
+EXPECTED_E4 = 99
+
+
 def gap_by_seed(cond, arm):
-    return {s: statistics.median(r[1] - r[0] for r in rr)
-            for (c, m, s), rr in G.items() if c == cond and m == arm and rr}
+    out = {}
+    for (c, m, s), rr in G.items():
+        if c != cond or m != arm:
+            continue
+        g = [r[1] - r[0] for r in rr if r[2] >= EXPECTED_E4]
+        if g:
+            out[s] = statistics.median(g)
+    return out
 
 
 fig, ax = plt.subplots(figsize=(3.5, 2.9))
