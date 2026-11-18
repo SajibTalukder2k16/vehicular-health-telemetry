@@ -195,3 +195,78 @@ are staged into `manuscript/figures/` so `\includegraphics` resolves.
 
 Items 1–2 do not block drafting. Item 3 shapes how drafting starts. Items 4–5
 must be settled before the C4 section and its figure go in.
+
+---
+
+## Added 2026-11-18 — the indoor campaigns, and two claims withdrawn
+
+Evidence: `docs/INDOOR_BACKHAUL_RESULT.md`. Corpora
+`simulations/room/results_room_wifi/` (300 runs) and
+`simulations/pilot/results_indoor_lte/` (150 runs). Tools
+`tools/analyze_room_ladder.py`, `tools/compare_backhaul.py`.
+
+| claim in the paper | evidence | status |
+|---|---|---|
+| A quiet WLAN carries a PRV-grade camera; a busy one does not | 0 of 17,969 frames dropped quiet; 75.95 % dropped at 80 % busy vs a 75.8 % derivation | **measured**, C1's WLAN row promoted from derived |
+| The camera's load stays off the verification path | completion 100 % and E4 gap 0.0350 s identical across wired / quiet WLAN / busy WLAN | **measured** |
+| The gap cost is dominated by the backhaul | ×3.78 per-seed, Mann–Whitney p = 1.5e-7, mobility/load/window matched | **significant** |
+| The completion failure is dominated by coverage loss | 83.8 → 51.4 %, Fisher p = 0.0009 | **significant** |
+| Mobility and moderate load move the gap | ×1.54, p = 0.156 | **not detected** — stated as a failure to detect, never as equivalence |
+| An LTE backhaul costs completion | 100 → 91.4 %, Fisher p = 0.239 | **not detected** — neither direction is supportable |
+| A run's first escalation is slower (cold grant) | ×2.10, p = 0.262; WLAN control flat at ×1.00 | **open question**, explicitly not claimed |
+
+**Two previously published statements withdrawn, both overstatements:**
+
+1. **"The 16–49 % failure is a property of the mobile uplink."**
+   (`ROOM_LADDER_RESULT.md` §3, and the paper's §room.) "Mobile" was doing
+   work the evidence did not support: with mobility matched, the gap step is
+   the backhaul and the completion step is coverage. Replaced with "the
+   delivery path", decomposed.
+2. **"On cellular the alert falls as evidence grows; the effect is specific to
+   cellular grant acquisition."** (`ROOM_LADDER_RESULT.md` §4.) Across E1→E4
+   the alert is flat in `CondHealthy`, trendless within a few ms in
+   `CondCongested` and `CondTransient`, and falls materially only in
+   `CondOutage` — non-monotonically. A stationary unloaded *cellular* arm is
+   flat too. It is a coverage-loss effect plus a ref→E1 step.
+
+**One artefact caught and not reported as a result.** An apparent 1.3 → 1.5 ms
+alert shift under a busy WLAN came from `camLink` sharing RNG stream 4 with
+the BLE link and the edge service (`simulations/room/omnetpp.ini:27`).
+Isolating the stream reverses the sign. No published result is affected:
+`WiredLink` makes no random draws, and every earlier campaign runs the camera
+on a cable.
+
+**Open, and the user's call:** the artifact repository is pinned at commit
+`c6f0f81` in §Reproducibility. The two new corpora, three new tools and the
+`CondIndoorLte` configuration are **not yet in it**, so the pin is stale with
+respect to this document.
+
+## Added 2026-11-18 (second) — the BLE camera
+
+Evidence: `docs/BLE_CAMERA_RESULT.md`. Corpus
+`simulations/room/results_room_ble/` (450 runs), driver
+`tools/room_ble_ladder.sh`.
+
+| claim in the paper | evidence | status |
+|---|---|---|
+| A PRV-grade camera cannot use BLE | 97.07 % of 17,969 frames dropped; the 2.93 % surviving is 0.747 Mb/s | **measured**, C1's largest margin |
+| A 4 KiB camera at 10 fps *can* use BLE | 0 drops of 2,994; frontier 23.3 fps at that frame size | **measured** |
+| Large frames waste a BLE link | 53 kB at 2 fps delivers 0.426 Mb/s vs 0.747 at 60 fps; 64 KiB buffer holds one frame | **measured** |
+| A BLE wearable needs one PDU per interval or delivers nothing | cliff between `maxCiUtilization` 0.0823 and 0.0820, against a derived 2468/30000 = 0.08227 | **measured**, derivation confirmed to 3 dp |
+| A saturated sensor link does not touch the escalation path | completion 100 %, E4 gap 0.0350 s across wired / WLAN quiet / WLAN busy / BLE | **measured but structural** — the alarm is edge-generated (`SensorRig.ned:68`), so the paper states this as a consistency check, not a finding |
+
+**One label in this repository corrected.** `Room5GHzCameraBle` was described
+as "documented-infeasible: 4KiB camera at 10fps over BLE". That configuration
+offers 0.33 Mb/s against a ~0.765 Mb/s ceiling and drops nothing. The label
+conflated a 4 KiB camera with a PRV-grade one and has been rewritten.
+
+**One prediction wrong in an instructive way.** P5 put the wearable's cliff
+below `maxCiUtilization` ≈ 0.05, reasoning from its bandwidth need (512 B/s of
+0.765 Mb/s, about 0.5 %). The real threshold is 16× higher at 0.0823 because
+the binding constraint is whether a single PDU fits in the interval budget,
+not throughput. A BLE link's floor is set by quantisation.
+
+**A metric trap, the same shape as `maxAge = 0.5 s`.** In the stalled arms the
+drop counter reads 57.53 % while delivery is **zero**; the other 42.5 % sit in
+a queue that never drains. Scoring that arm on drop rate reports a partial
+problem where the truth is total failure.
