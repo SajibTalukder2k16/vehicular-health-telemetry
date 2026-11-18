@@ -51,7 +51,13 @@ RATE = {"prv": (53167, 60), "prv2": (53167, 2), "k4f60": (4096, 60),
 WANT = {"camera.packetSent:count", "camLink.packetsDropped",
         "camLink.queueBytes:timeavg", "wearable.packetSent:count",
         "bleWearable.packetsDropped", "bleWearable.queueBytes:timeavg",
-        "app[0].received_vitals"}
+        "app[0].received_vitals",
+        "camLink.linkDelay:count", "camLink.linkDelay:mean",
+        "bleWearable.linkDelay:count", "bleWearable.linkDelay:mean"}
+STAT = re.compile(r"^statistic\s+\S*\.(?P<mod>camLink|bleWearable)\s+"
+                  r"linkDelay:stats\s*$")
+FIELD = re.compile(r"^field\s+(?P<k>count|mean)\s+(?P<v>\S+)")
+WINDOW = 300.0   # s; every room configuration's sim-time-limit
 
 
 def load(src):
@@ -67,7 +73,21 @@ def load(src):
         if not m:
             continue
         with open(p) as fh:
+            pend = None
             for line in fh:
+                st = STAT.match(line)
+                if st:
+                    pend = st["mod"]
+                    continue
+                if pend:
+                    fl = FIELD.match(line)
+                    if fl:
+                        key = f'{pend}.linkDelay:{fl["k"]}'
+                        if key in WANT:
+                            agg[m["label"]][key].append(float(fl["v"]))
+                        continue
+                    if not line.startswith("field"):
+                        pend = None
                 s = SCA.match(line)
                 if not s:
                     continue
@@ -88,9 +108,12 @@ def mean(agg, label, metric, default=float("nan")):
 def camera_table(agg):
     labels = [k for k in agg if agg[k].get("camera.packetSent:count")]
     print("CAMERA SENSOR LINK")
+    print("  `accepted` is offered x (1 - dropped/sent): an ESTIMATE that")
+    print("  counts a frame still queued at termination as delivered.")
+    print("  `delivered` is measured -- linkDelay fires only on completion.")
     print(f"  {'arm':18s} {'frame B':>8s} {'fps':>4s} {'offered':>9s} "
-          f"{'sent':>7s} {'dropped':>8s} {'drop %':>7s} {'deliv Mb/s':>11s} "
-          f"{'queue B':>8s}")
+          f"{'sent':>7s} {'dropped':>8s} {'drop %':>7s} {'accepted':>9s} "
+          f"{'delivered':>10s} {'ms/frame':>9s} {'queue B':>8s}")
     for lab in sorted(labels):
         sent = mean(agg, lab, "camera.packetSent:count")
         drop = mean(agg, lab, "camLink.packetsDropped", 0.0)
@@ -104,8 +127,13 @@ def camera_table(agg):
         deliv = off * (1 - drop / sent) if sent else float("nan")
         bs, fs = f"{B}", f"{fps}"
         pct = 100 * drop / sent if sent else float("nan")
+        got = mean(agg, lab, "camLink.linkDelay:count")
+        dly = mean(agg, lab, "camLink.linkDelay:mean")
+        # measured goodput: completed frames x bytes over the window
+        meas = got * B * 8 / WINDOW / 1e6 if got == got else float("nan")
         print(f"  {lab:18s} {bs:>8s} {fs:>4s} {off:9.2f} {sent:7.0f} "
-              f"{drop:8.0f} {pct:7.2f} {deliv:11.3f} {q:8.0f}")
+              f"{drop:8.0f} {pct:7.2f} {deliv:9.3f} {meas:10.3f} "
+              f"{1e3*dly:9.3f} {q:8.0f}")
 
 
 def share_table(agg):

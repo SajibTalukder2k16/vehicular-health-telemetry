@@ -92,6 +92,30 @@ def mann_whitney(xs, ys):
     return u, z, min(1.0, p)
 
 
+def seed_completion(per, cond, arm, exp):
+    """-> [per-seed completion fraction], one value per run that has bursts.
+
+    WHY THIS EXISTS. Fisher's exact test on pooled escalations assumes every
+    escalation is an independent observation. They are not: escalations from
+    one run share a mobility trace, a radio realisation and a background-load
+    draw, so a run that is having a bad time contributes several correlated
+    failures. Pooling therefore overstates the effective sample size and the
+    pooled p-value is anti-conservative.
+
+    Clustering at the run is the natural unit, since the seed is what is
+    independent by construction. The per-seed fractions then go through the
+    same unpaired rank test as the gap, which makes no independence claim
+    about escalations within a run. Raised by external review.
+    """
+    out = []
+    for (c, a, s), (al, ch) in per.items():
+        if c != cond or a != arm or not ch:
+            continue
+        full = [t for t, v in ch.items() if len(v) >= exp]
+        out.append(len(full) / len(ch))
+    return out
+
+
 def seed_median_gaps(per, cond, arm):
     exp = EXPECTED[arm]
     out = []
@@ -111,16 +135,39 @@ def main():
     ap.add_argument("corpus_a"); ap.add_argument("cond_a")
     ap.add_argument("corpus_b"); ap.add_argument("cond_b")
     ap.add_argument("--arm", default="e4")
-    ap.add_argument("--horizon", type=float, default=300.0)
+    ap.add_argument("--horizon-a", type=float, default=None,
+                    help="sim-time-limit of corpus A; default: the condition's "
+                         "own entry in completion.HORIZON, else 300 s")
+    ap.add_argument("--horizon-b", type=float, default=None,
+                    help="likewise for corpus B")
     a = ap.parse_args()
 
     pa, pb = load_corpus(a.corpus_a), load_corpus(a.corpus_b)
-    for c in (a.cond_a, a.cond_b):
-        completion.HORIZON[c] = a.horizon
 
-    print(f"arm {a.arm}, horizon {a.horizon:g} s\n")
-    print(f"  A = {a.cond_a}  ({a.corpus_a})")
-    print(f"  B = {a.cond_b}  ({a.corpus_b})\n")
+    # ONE HORIZON FOR BOTH INPUTS WAS A BUG, and a silent one. The censoring
+    # test is `creation + t_obs > horizon`, so forcing 300 s onto a condition
+    # that ran to 680 s reclassifies real losses as censored and drops them
+    # from the denominator. On CondOutage at E4 that turned 37/72 into 37/43
+    # and Fisher's p from 0.000882 into 1.000 -- it would have erased the one
+    # completion effect in the decomposition. Raised by external review.
+    #
+    # The four cellular conditions carry their own sim-time-limits in
+    # completion.HORIZON (320/1369/1369/680 s); the indoor configurations run
+    # 300 s and are not in that table. So the default is now: use the
+    # condition's own entry when it has one, else 300 s. --horizon-a/-b
+    # override per input, never jointly.
+    INDOOR_DEFAULT = 300.0
+    hz = {}
+    for cond, override in ((a.cond_a, a.horizon_a), (a.cond_b, a.horizon_b)):
+        if override is not None:
+            completion.HORIZON[cond] = override
+        elif cond not in completion.HORIZON:
+            completion.HORIZON[cond] = INDOOR_DEFAULT
+        hz[cond] = completion.HORIZON[cond]
+
+    print(f"arm {a.arm}\n")
+    print(f"  A = {a.cond_a}  ({a.corpus_a})  horizon {hz[a.cond_a]:g} s")
+    print(f"  B = {a.cond_b}  ({a.corpus_b})  horizon {hz[a.cond_b]:g} s\n")
 
     ca, _, la, _ = completion.classify(pa, a.arm, a.cond_a, EXPECTED[a.arm])
     cb, _, lb, _ = completion.classify(pb, a.arm, a.cond_b, EXPECTED[a.arm])
@@ -132,6 +179,21 @@ def main():
           f"{100*cb/(cb+lb) if cb+lb else float('nan'):.1f}%")
     print(f"  p = {p:.4f}   -> "
           f"{'SIGNIFICANT at 0.05' if p < 0.05 else 'NOT significant at 0.05'}")
+    print("  (pools escalations; those within a run are correlated, so this")
+    print("   p-value is anti-conservative -- see the clustered test below)")
+
+    sa = seed_completion(pa, a.cond_a, a.arm, EXPECTED[a.arm])
+    sb = seed_completion(pb, a.cond_b, a.arm, EXPECTED[a.arm])
+    print("\nCOMPLETION, CLUSTERED BY RUN   Mann-Whitney U on per-seed "
+          "completion fractions")
+    print(f"  A  n={len(sa):3d} runs  mean fraction "
+          f"{sum(sa)/len(sa) if sa else float('nan'):.3f}")
+    print(f"  B  n={len(sb):3d} runs  mean fraction "
+          f"{sum(sb)/len(sb) if sb else float('nan'):.3f}")
+    if len(sa) >= 2 and len(sb) >= 2:
+        _, _, pc = mann_whitney(sa, sb)
+        print(f"  p = {pc:.4g}   -> "
+              f"{'SIGNIFICANT at 0.05' if pc < 0.05 else 'NOT significant at 0.05'}")
 
     ga, gb = seed_median_gaps(pa, a.cond_a, a.arm), seed_median_gaps(pb, a.cond_b, a.arm)
     print("\nGAP          Mann-Whitney U on per-seed medians, two-sided, unpaired")

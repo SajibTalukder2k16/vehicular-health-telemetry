@@ -12,9 +12,10 @@ from, so every one of them regenerates from this repository alone.
 | `room_wifi_latencies.csv.gz` | `results_room_wifi` | 300 | ladder, camera on the WLAN, quiet and 80 % busy |
 | `room_ble_latencies.csv.gz` | `results_room_ble` (Part A) | 150 | ladder, camera on BLE |
 | `indoor_lte_latencies.csv.gz` | `results_indoor_lte` | 150 | ladder, stationary unloaded edge on an LTE backhaul |
+| `indoor_lte_cam4k_latencies.csv.gz` | `results_indoor_lte_cam4k` | 150 | the same arm at a 4 KiB camera, matching `CondHealthy`'s payload |
 | `sensor_link_scalars.csv.gz` | all three room corpora | 1,050 | camera-link load, wearable vitals delivery |
 
-The four `*_latencies.csv.gz` files hold the per-escalation vectors
+The five `*_latencies.csv.gz` files hold the per-escalation vectors
 (`condition,arm,seed,kind,recv_time,delay,creation`) written by
 `tools/extract_vec.py`. `sensor_link_scalars.csv.gz` holds the seven scalars
 the camera-link and radio-share tables need, written by
@@ -54,7 +55,7 @@ python3 -I tools/verify_indoor_extract.py \
     simulations/room/results_room_ladder analysis/indoor/room_wired_latencies.csv.gz
 ```
 
-All four passed at the time of extraction: **30 cells × 5 statistics**
+All five passed at the time of extraction: **35 cells × 5 statistics**
 (complete, lost, median alert, median gap, median dispatch) agreeing to
 $10^{-9}$.
 
@@ -73,7 +74,14 @@ sh tools/room_ladder.sh          # 300 runs, ~90 s
 sh tools/room_wifi_ladder.sh     # 300 runs, ~17 s
 sh tools/indoor_lte_ladder.sh    # 150 runs, ~43 s
 sh tools/room_ble_ladder.sh      # 450 runs, ~18 s  (Parts A, B and C)
+CAM4K=1 sh tools/indoor_lte_ladder.sh   # 150 runs; the 4 KiB camera control
 ```
+
+The `CAM4K=1` control exists because the cellular corpus runs its camera at
+4 KiB (`CondHealthy`) or 60 KiB, not at the 53,167 B the indoor campaigns use.
+It checks whether that mismatch reaches the verification path. It does not:
+the alert and the E4 gap are identical and completion moves by one burst in
+35.
 
 Note that `room_ble_ladder.sh` Parts B and C write labels (`rate-*`,
 `share-*`) that the latency extracts deliberately exclude: those sweeps vary

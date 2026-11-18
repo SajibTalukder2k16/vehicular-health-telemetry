@@ -69,6 +69,23 @@ CAM_BYTES=53167B
 ARMS="ref:0 e1:512 e2:3584 e3:57344 e4:138000"
 CONDS="CondIndoorLte"
 
+# A 4 KiB CAMERA CONTROL, added 2026-11-18 after external review.
+#   The cellular corpus runs its camera at the size each condition's ini
+#   sets -- 4 KiB in CondHealthy, 60 KiB in the other three -- NOT at the
+#   53,167 B this driver uses, so the stationary-to-mobile step changes the
+#   camera payload as well as mobility, load and window. Under the derived
+#   partition that should not matter: frames terminate at the edge and never
+#   cross the uplink. Set CAM4K=1 to re-run this arm at 4 KiB and check it
+#   rather than assume it. Measured: the alert and the E4 gap are identical
+#   (15.7 ms, 68.0 ms) and completion moves by one burst in 35.
+#
+#     CAM4K=1 sh tools/indoor_lte_ladder.sh
+if [ "${CAM4K:-0}" = "1" ]; then
+    CAM_BYTES=4096B
+    OUT="$ROOT/simulations/pilot/results_indoor_lte_cam4k"
+    mkdir -p "$OUT"
+fi
+
 # Unlike the room, this network names its server `server`, which the pilot
 # ini's selective vector-recording block already matches -- so no
 # vector-recording overrides are needed here. The edge app is ue.app[0], not

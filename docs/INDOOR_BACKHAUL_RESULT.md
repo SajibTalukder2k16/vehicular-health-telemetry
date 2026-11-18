@@ -339,3 +339,121 @@ Two failures that completed successfully and produced nothing:
 Both are recorded because each one produced a complete, clean, empty run — the
 same failure mode as the room network's `cloud`/`server` naming mismatch, and
 the third instance of it in this project.
+
+---
+
+## 8. Corrections from external review, 2026-11-18 (second round)
+
+A review of this work reproduced the E4 gap medians (35 ms WLAN, 68 ms
+stationary LTE) and the 3.78 per-seed ratio, and raised six points. **All six
+were verified and all six were right.** What changed:
+
+### 8a. The attribution to coverage loss is withdrawn
+
+§3 read "the completion collapse is driven specifically by losing coverage
+(p = 0.0009)". The difference is real and significant, but `CondHealthy` and
+`CondOutage` differ in **five** respects at once:
+
+| | Healthy | Outage |
+|---|---|---|
+| sites, spacing | 6 at 1 km | 2 at 16 km |
+| propagation setting | urban | rural |
+| background UEs | 4 | 8 |
+| camera payload | 4 KiB | 60 KiB |
+| observation window | 320 s | 680 s |
+
+No experiment in this project varies coverage alone. **The difference is
+reported; the attribution is not.** Only the WLAN→LTE step isolates a single
+factor.
+
+### 8b. The camera payload was NOT matched to the cellular campaign — and it is inert
+
+§1 and the paper said the rig was "identical" to the cellular campaign. It is
+not: the indoor campaigns run the camera at 53,167 B, the cellular corpus at
+**4 KiB (Healthy) and 60 KiB (the other three)**. `escalation_pilot.sh`
+carries `CAM_BYTES=53167B`, but the committed Gate A corpus predates that
+line — its own manifest records 4KiB/60KiB, and the manifest does record
+command-line overrides, since `sendInterval` appears there as 0.0166667 s.
+The rate is 60 fps throughout.
+
+Rather than argue this away, it was measured: the indoor cellular arm was
+re-run at 4 KiB to match `CondHealthy`.
+
+| camera | alert | E4 gap | E4 dispatch | E4 completion |
+|---|---|---|---|---|
+| 53,167 B | 0.0157 | 0.0680 | 0.0840 | 32/35 |
+| 4 KiB | 0.0157 | 0.0680 | 0.0829 | 31/35 |
+
+**The alert and the gap are identical.** Completion moves by one burst. So the
+mismatch is real in the configuration and inert in the comparison, which is
+what the derived partition predicts — frames terminate at the edge and never
+cross the uplink.
+
+### 8c. `compare_backhaul.py` applied one horizon to both inputs
+
+A real bug, and a silent one. The censoring test is
+`creation + t_obs > horizon`; forcing the indoor 300 s onto `CondOutage`,
+which ran to 680 s, reclassified genuine losses as censored and dropped them
+from the denominator — **37/72 became 37/43 and Fisher's p went from 0.000882
+to 1.000.** It would have erased the one completion effect in the table.
+
+The published p = 0.0009 was *not* affected: it came from an inline analysis
+that left the cellular conditions' own horizons in place, and the reviewer
+independently reproduced 0.000882. But the shipped tool would not have
+reproduced it. It now takes the condition's own `completion.HORIZON` entry
+when it has one and 300 s otherwise, with `--horizon-a`/`--horizon-b`
+overriding per input rather than jointly.
+
+### 8d. Completion tests now also cluster by run
+
+Fisher's exact on pooled escalations assumes each is independent. They are
+not: escalations from one run share a mobility trace, a radio realisation and
+a background-load draw, so pooling overstates the effective sample size and
+the p-value is anti-conservative. Every completion contrast is now also tested
+on per-run completion fractions:
+
+| step | pooled p | clustered p |
+|---|---|---|
+| WLAN → LTE | 0.239 | 0.081 |
+| LTE still → LTE mobile+loaded | 0.480 | 0.548 |
+| light load → outage | 0.0009 | **0.0008** |
+
+**No conclusion changes.** The outage difference survives clustering.
+
+### 8e. "Delivered" was an estimate; it is now measured
+
+`indoor_sensor_links.py` computed delivered rate as
+`offered × (1 − dropped/sent)`, which counts a frame undropped but still
+queued at termination as delivered. `linkDelay` fires only on transmission
+completion, so its count is the true delivered figure. Both are now reported:
+
+| arm | accepted (estimate) | delivered (measured) |
+|---|---|---|
+| WLAN quiet | 25.520 | **25.475** |
+| WLAN 80 % busy | 6.138 | **6.125** |
+| BLE, PRV grade | 0.747 | **0.744** |
+| BLE, 4 KiB @ 30 fps | 0.765 | **0.762** |
+
+The estimate was high by ≤ 0.06 % — the distinction is methodologically right
+and numerically small here. It also recovers the per-frame link delay, which
+the earlier table reported as `nan`: **13.86 ms** on the quiet WLAN, against
+13.8 ms derived.
+
+### 8f. Numbers and labels fixed in the paper
+
+- the gate sweep's **128 KiB row collapsed three refill rates into "any"**,
+  and they differ: at 1 Mb/s completion is 89.2/71.0/69.0/56.2, at 16 Mb/s it
+  equals the baseline exactly. Two of that row's completion figures matched no
+  arm at all. Split into three rows; the 256 KiB control likewise.
+- **Congested E2 deadline success 90.2 % → 89.5 %** (128/143). Independently
+  recomputed from the definition in the table's own caption; every other cell
+  in that table was correct.
+- completion percentages in the sweep table now carry **one decimal**, the
+  paper's convention elsewhere: `(60)` was 59.5, and `87 % against 84 %` was
+  86.5 % against 83.8 %.
+- **6.6 GB → 7.6 GB** of raw output; "three indoor campaigns" → five.
+- the indoor table now shows **counts and names its denominator** (observed
+  bursts, not emitted — the ladder extract has no emission counter).
+- the 8.23 % BLE threshold is now **scoped** to this model's 30 ms interval,
+  1 Mb/s PHY and 251 B data units. What generalises is that the floor is one
+  PDU, not a share of bandwidth.

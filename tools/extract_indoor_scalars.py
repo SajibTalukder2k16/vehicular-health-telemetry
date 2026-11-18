@@ -30,7 +30,22 @@ TAG = re.compile(r"^(?P<label>.+)-s(?P<seed>\d+)$")
 WANT = {"camera.packetSent:count", "camLink.packetsDropped",
         "camLink.queueBytes:timeavg", "wearable.packetSent:count",
         "bleWearable.packetsDropped", "bleWearable.queueBytes:timeavg",
-        "app[0].received_vitals"}
+        "app[0].received_vitals",
+        # The TRUE delivered counter. `sent - dropped` is accepted traffic,
+        # not goodput: a frame undropped but still queued at termination is
+        # counted as delivered by that subtraction and is not. BleLink and
+        # WifiLink emit linkDelay only when a message COMPLETES, so its
+        # count is what actually arrived. On the BLE camera the two differ
+        # (524 delivered against 525 accepted); at `rate-prv2`, where the
+        # queue holds a whole frame, they differ by more.
+        "camLink.linkDelay:count", "camLink.linkDelay:mean",
+        "bleWearable.linkDelay:count", "bleWearable.linkDelay:mean"}
+
+# `statistic <module> <name>` opens a block of `field <k> <v>` lines, so the
+# two statistics above are not on `scalar` lines and need the block parsed.
+STAT = re.compile(r"^statistic\s+\S*\.(?P<mod>camLink|bleWearable)\s+"
+                  r"(?P<name>linkDelay):stats\s*$")
+FIELD = re.compile(r"^field\s+(?P<k>count|mean)\s+(?P<v>\S+)")
 
 
 def main():
@@ -52,7 +67,23 @@ def main():
                     continue
                 files += 1
                 with open(p) as f:
+                    pend = None          # module of the open statistic block
                     for line in f:
+                        st = STAT.match(line)
+                        if st:
+                            pend = st["mod"]
+                            continue
+                        if pend:
+                            fl = FIELD.match(line)
+                            if fl:
+                                key = f'{pend}.linkDelay:{fl["k"]}'
+                                if key in WANT:
+                                    w.writerow([corpus, m["label"],
+                                                m["seed"], key, fl["v"]])
+                                    rows += 1
+                                continue
+                            if not line.startswith("field"):
+                                pend = None
                         s = SCA.match(line)
                         if not s:
                             continue
