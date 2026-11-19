@@ -35,6 +35,7 @@ OBJS = \
     $O/apps/EdgeApp.o \
     $O/apps/HealthServerApp.o \
     $O/links/BleLink.o \
+    $O/links/WifiLink.o \
     $O/links/WiredLink.o \
     $O/nodes/DelaySink.o \
     $O/nodes/EdgeAggregator.o \

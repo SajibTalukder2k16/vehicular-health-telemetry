@@ -31,11 +31,20 @@ simple HealthServerApp extends SimpleModule like IApp
         @signal[e2eDelayObd](type=simtime_t);
         @signal[e2eDelayCamera](type=simtime_t);
         @signal[e2eDelayAlarm](type=simtime_t);
+        @signal[e2eDelayEvidence](type=simtime_t);
         @statistic[e2eDelay](title="end-to-end delay (all streams)"; unit=s; record=stats,histogram,vector; interpolationmode=none);
         @statistic[e2eDelayVitals](title="end-to-end delay, vitals"; unit=s; record=stats,histogram,vector; interpolationmode=none);
         @statistic[e2eDelayObd](title="end-to-end delay, OBD"; unit=s; record=stats,vector; interpolationmode=none);
         @statistic[e2eDelayCamera](title="end-to-end delay, camera"; unit=s; record=stats,vector; interpolationmode=none);
-        @statistic[e2eDelayAlarm](title="end-to-end delay, alarm"; unit=s; record=stats,vector; interpolationmode=none);
+        // HISTOGRAM ADDED 2026-11-06. Without it the alarm budget could not be
+        // rescored after the fact, so the unsourced 5 s figure was effectively
+        // frozen into every result: tools/deadline_sensitivity.py can rescore
+        // vitals at any deadline from bins already on disk, but had no bins to
+        // read for alarms. With this, the alarm budget becomes a REPORTED AXIS
+        // rather than a constant a reviewer can delete the finding by
+        // rejecting (docs/PLAN_2026-11.md §9 M3, §14 decision 5).
+        @statistic[e2eDelayAlarm](title="end-to-end delay, alarm"; unit=s; record=stats,histogram,vector; interpolationmode=none);
+        @statistic[e2eDelayEvidence](title="end-to-end delay, verification evidence"; unit=s; record=stats,histogram,vector; interpolationmode=none);
     gates:
         input socketIn @labels(UdpCommand/up);
         output socketOut @labels(UdpCommand/down);

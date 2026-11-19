@@ -158,5 +158,10 @@ cell_room() {
 cell_pilot indoor_lte_120      CondIndoorLte 53167B
 cell_pilot indoor_lte_4k_120   CondIndoorLte 4KiB
 cell_pilot healthy_120         CondHealthy   53167B
+# CondOutage was run for the paper but was MISSING from this driver, which
+# launched four arms and 2,400 runs while the paper described five and 3,000.
+# It had been run by an ad-hoc inline command, so the published driver did not
+# reproduce the published campaign. Raised by external review.
+cell_pilot outage_120          CondOutage    53167B
 cell_room
 echo "done"

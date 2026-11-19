@@ -564,3 +564,104 @@ together; step 3 changes site count and spacing, propagation, load and window
 together. **The withdrawn attribution of §8a stays withdrawn** — nothing here
 varies coverage alone, and a significant difference is still not an attributed
 cause.
+
+---
+
+## 10. Third review round, 2026-11-19: the artifact did not build the results
+
+A review compiled the manuscript and reran the analyses from artifact commit
+`5b0ee41`. Its first point was the serious one and it was right.
+
+### 10a. The published source could not have produced the results
+
+At `5b0ee41` the artifact's `src/` was **stale**: no `evidenceBytes`, no
+`cameraTerminatesAtEdge`, no `e2eDelayEvidence`. Five source files differed
+from the working tree — `EdgeApp.{cc,ned}`, `HealthServerApp.{cc,ned}`,
+`SensorData.msg` — plus `src/Makefile`. The campaign drivers set parameters
+the published model did not declare.
+
+Two scenario inputs were missing too: `corridorA/demo.xml` (89 B, the network
+configurator) and the `speed*.bonnmotion` traces. Without them the pilot
+cannot start at all, so the README's claim that "any campaign can be re-run
+from scratch" was false.
+
+**Cause:** across three sync rounds I copied `tools/`, `docs/`, `analysis/`
+and `simulations/` and never diffed `src/`. The reviewer's test — build the
+artifact clean and reproduce one cell — is the check that catches this, and
+nothing I had been doing could.
+
+**Now verified.** A clean copy of the artifact repository, built with its own
+committed Makefile per its README, reproduces the published `CondHealthy` E4
+cell exactly: **31 complete / 6 lost, pooled 0.1920, per-seed 0.2035**.
+
+### 10b. The 120-seed driver was missing an arm
+
+`indoor_power120.sh` launched four configurations and 2,400 runs while the
+paper described five and 3,000. `CondOutage` had been run by an ad-hoc inline
+command, so the published driver did not reproduce the published campaign.
+Added, with an `outage` entry in `verify_power120.py`, which validates
+(37/35, .4020, .4455).
+
+### 10c. A reported p-value the script could not produce
+
+Table VII gave $p = 2\times10^{-16}$ for the first gap comparison. The script
+printed exactly `0`: `2(1-\Phi(z))` built from `erf` cancels catastrophically
+at $z = 10.08$, and the table's figure was a bound I supplied by hand. The
+two-sided tail is `erfc(z/√2)` identically, which is accurate to ~1e-300 and
+gives **6.47e-24** — matching the reviewer's independent SciPy check. Fixed,
+and the Fisher print had the same defect (`:.4f` showed `0.0000` for 1.2e-05).
+
+Sample sizes are now in the table: the gap tests use **72, 65, 64, 77** of
+120 seeds, since a run with no complete burst contributes no median.
+
+### 10d. `grant_warmup.py` filtered completeness before ordering
+
+The tool took index 0 *after* dropping incomplete bursts, so it compared the
+first **completed** escalation with later completed ones. Seed 54 is the
+worked example: its first escalation delivers 97 of 99 chunks, so the second
+was promoted to "first".
+
+Fixed — order is fixed over every escalation first — and a paired within-run
+sign test added, because first and later observations from one run are
+dependent. Corrected results:
+
+| | value |
+|---|---|
+| unpaired | 1.29×, p = 0.36 |
+| paired, 26 runs with both | 16 of 26 slower first, p = 0.33 |
+
+**The conclusion is softened, not kept.** §9c said the conjecture was
+"withdrawn"; a non-significant test does not establish absence. The paper now
+says the expanded experiment did not provide sufficient evidence for the
+cold-start explanation and the mechanism remains unresolved.
+
+### 10e. Claims narrowed
+
+"Isolates a single factor" is gone in all five places: the first comparison
+matches mobility, load, window and workload but still contrasts two complete
+network configurations. Also withdrawn: "the policy is not the problem" (the
+policy is held fixed and never varied, so these experiments do not test it),
+"mobility and load add essentially nothing to the alert" (medians reported
+instead), and "one lever therefore remains" (other mechanisms were not
+exhaustively evaluated). The gate's "best achievable outcome is zero harm" is
+now restricted to the conditional-gap metric. The 13.9× figure is stated as
+the span between endpoints, not a product of separable effects.
+
+### 10f. The camera payload, settled in the other direction
+
+The reviewer also withdrew their own earlier point 2, independently reaching
+what §8b's retraction records: every driver overrides to 53,167 B. Four
+passages in the paper gave incompatible accounts and are reconciled to one.
+Removed with them: a paragraph claiming the payload was inherited from a 2 Hz
+study, and one claiming `CondHealthy` carries 15× less camera load than the
+other conditions — both false once the override is accounted for.
+
+The 4 KiB run is now described as a **payload sensitivity analysis**, which is
+all it ever was.
+
+### 10g. Accounting reconciled
+
+The enumerated campaigns now sum to the stated total: 600 + 480 + 960 + 1,350
++ 3,000 + 2,160 = **8,550**. The indoor bullet said 1,200 while listing 1,350,
+the 3,000-run campaign was absent from the list, and the campaign table's
+caption asserted 30 seeds for every cell.

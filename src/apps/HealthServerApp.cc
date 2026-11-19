@@ -16,7 +16,10 @@ namespace paperrebuild {
 class HealthServerApp : public ApplicationBase, public UdpSocket::ICallback
 {
   protected:
-    static const int NUM_TYPES = 4;  // vitals, obd, camera, alarm
+    // vitals, obd, camera, alarm, evidence. Evidence is the verification
+    // burst the edge emits at escalation; it shares the uplink with the alert
+    // it exists to justify, which is why its delay is recorded separately.
+    static const int NUM_TYPES = 5;
     UdpSocket socket;
     long numReceived[NUM_TYPES] = {0};
     long deadlineMisses[NUM_TYPES] = {0};
@@ -49,10 +52,15 @@ class HealthServerApp : public ApplicationBase, public UdpSocket::ICallback
             perTypeSignal[1] = registerSignal("e2eDelayObd");
             perTypeSignal[2] = registerSignal("e2eDelayCamera");
             perTypeSignal[3] = registerSignal("e2eDelayAlarm");
+            perTypeSignal[4] = registerSignal("e2eDelayEvidence");
             deadlines[0] = par("vitalsDeadline");
             deadlines[1] = par("vitalsDeadline");
             deadlines[2] = par("vitalsDeadline");
             deadlines[3] = par("alarmDeadline");
+            // Evidence is held to the same budget as the alert it accompanies:
+            // evidence arriving after dispatch would have been decided cannot
+            // contribute to the verification, so lateness is the same failure.
+            deadlines[4] = par("alarmDeadline");
             feedbackInterval = par("feedbackInterval");
             feedbackLength = par("feedbackLength").intValue();
             feedbackSentSignal = registerSignal("feedbackSent");
@@ -137,7 +145,8 @@ class HealthServerApp : public ApplicationBase, public UdpSocket::ICallback
     virtual void finish() override
     {
         recordScalar("feedbackSent", numFeedbackSent);
-        static const char *names[NUM_TYPES] = {"vitals", "obd", "camera", "alarm"};
+        static const char *names[NUM_TYPES] = {"vitals", "obd", "camera",
+                                               "alarm", "evidence"};
         long total = 0;
         for (int i = 0; i < NUM_TYPES; i++) {
             total += numReceived[i];

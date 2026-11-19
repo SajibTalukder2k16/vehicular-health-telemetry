@@ -56,6 +56,53 @@ simple EdgeApp extends SimpleModule like IApp
         // drop and pace share cameraRate, so comparing them isolates temporal
         // spreading from volume reduction at a matched admitted workload.
         string admissionPolicy = default("none");
+
+        // ---- the derived architecture: camera terminates at the edge -------
+        // PRV-grade camera sensing costs ~25.5 Mb/s at 60 fps (Cerina et al.
+        // 2019, Table 1 x their recording format; docs/PLAN_2026-11.md §5).
+        // The cellular uplink benchmark is 3 Mb/s and BLE 0.74 Mb/s, so the
+        // inference CANNOT be in the cloud -- it is local, and raw frames
+        // never cross the WAN. With this true the camera class is counted and
+        // discarded here rather than forwarded.
+        //
+        // DEFAULT IS FALSE ON PURPOSE. Every result set recorded before
+        // 2026-11-06 (19,090 runs) assumed camera-to-cloud, and those configs
+        // must keep reproducing bit-identically. New escalation configs set it
+        // true; nothing already measured changes behaviour silently.
+        bool cameraTerminatesAtEdge = default(false);
+
+        // ---- the escalation: alert + verification evidence -----------------
+        // The server verifies before dispatching emergency services, and
+        // verification needs camera-derived evidence. So an escalation is two
+        // things on one link at one instant, and the evidence that justifies
+        // the alert is what can delay it. That conflict is the paper's
+        // central empirical question (RQ2).
+        //
+        // On each alarm the alert goes out immediately -- it is never gated,
+        // as before -- and evidenceBytes of evidence is enqueued behind it on
+        // the DEFERRABLE path, i.e. through exactly the token bucket, pacing
+        // and staleness-discard machinery the camera class used to use. The
+        // gate is re-aimed, not replaced: 'drop' still reduces volume, 'pace'
+        // still spreads over time, 'dropPace' still discards stale evidence --
+        // and discarding stale evidence is now PRINCIPLED rather than merely
+        // cheap, because evidence that arrives late cannot verify anything.
+        //
+        // Sizes come from the evidence ladder (docs/PLAN_2026-11.md §7), each
+        // derived rather than chosen:
+        //   E1      512B  trusts the edge; verifies nothing independently
+        //   E2     3.5KiB  pulse waveform -- server recomputes HR *and* HRV
+        //   E3      56KiB  one 640x480 still -- posture, eye closure, no vitals
+        //   E4      138KB  10 s at HR-grade 0.110 Mb/s -- HR from video
+        //   E5      95.7MB 30 s at PRV-grade 25.5 Mb/s -- HR+HRV from video
+        // 0 disables evidence entirely, which reproduces the alarm-only
+        // behaviour of the earlier corpus.
+        int evidenceBytes @unit(B) = default(0B);
+
+        // Evidence is chunked rather than offered as one datagram, because
+        // 95.7 MB in a single UDP packet is not a thing a real system does and
+        // the queueing behaviour of a burst is the whole point. One MTU-sized
+        // payload is the default.
+        int evidenceChunkBytes @unit(B) = default(1400B);
         double cameraRate @unit(bps) = default(1Mbps);        // token fill rate
         int cameraBurst @unit(B) = default(65536B);           // bucket depth
         int cameraQueueCapacity @unit(B) = default(262144B);  // pace queue bound
@@ -137,6 +184,14 @@ simple EdgeApp extends SimpleModule like IApp
         @signal[cameraGateDropped](type=long);
         @signal[cameraPendingBytes](type=long);
         @signal[cameraGateDelay](type=simtime_t);
+        // Escalation accounting. evidenceQueueDelay is the delay the gate adds
+        // to evidence specifically, which is the mechanism behind RQ2: if the
+        // burst delays the alert it does so by occupying the radio, and this
+        // is the term that shows the gate's own contribution to it.
+        @signal[evidenceEmitted](type=long);
+        @signal[evidenceQueueDelay](type=simtime_t);
+        @statistic[evidenceEmitted](title="evidence chunks enqueued at escalation"; record=count,sum; interpolationmode=none);
+        @statistic[evidenceQueueDelay](title="delay the gate adds to evidence"; unit=s; record=stats,histogram; interpolationmode=none);
         @statistic[cameraAdmitted](title="camera frames admitted by the gate"; record=count,sum; interpolationmode=none);
         @statistic[cameraGateDropped](title="camera frames dropped by the gate"; record=count,sum; interpolationmode=none);
         @statistic[cameraPendingBytes](title="camera bytes pending in the gate"; unit=B; record=stats,vector,timeavg; interpolationmode=sample-hold);

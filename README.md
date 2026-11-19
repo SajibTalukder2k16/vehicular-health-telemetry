@@ -220,6 +220,15 @@ Built against OMNeT++ 6.4.0, INET 4.7.0 and Simu5G 1.4.4 on Linux with clang.
 Vehicle traces come from SUMO 1.27 over OpenStreetMap extracts, exported per
 second and replayed; `tools/fcd2bonnmotion.py` does that conversion.
 
+**Verified from a clean checkout.** Building this repository with the steps
+below and running `CondHealthy` at E4 over seeds 0--29 reproduces the
+published cell exactly: 31 complete / 6 lost, pooled gap 0.1920 s, per-seed
+0.1920/0.2035 s. `tools/verify_power120.py` performs that check. An earlier
+version of this repository shipped a stale `src/` that lacked
+`evidenceBytes`, `cameraTerminatesAtEdge` and `e2eDelayEvidence`, and omitted
+`simulations/corridorA/demo.xml` and the mobility traces, so it could not have
+produced the results at all; `docs/INDOOR_BACKHAUL_RESULT.md` §10a records it.
+
 ```sh
 # with a Simu5G 1.4.4 checkout at ../Simu5G
 git -C ../Simu5G apply /path/to/patches/simu5g-1.4.4-defects.patch

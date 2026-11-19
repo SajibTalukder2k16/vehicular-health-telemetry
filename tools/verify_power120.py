@@ -38,6 +38,7 @@ EXPECTED = {
     "indoor_lte_4k": ("CondIndoorLte", 300.0, 31,  4, 0.0680, None),
     "room5g":      ("RoomMatched5GHz", 300.0, 35,  0, 0.0350, 0.0349),
     "healthy":     ("CondHealthy",     320.0, 31,  6, 0.1920, 0.2035),
+    "outage":      ("CondOutage",      680.0, 37, 35, 0.4020, 0.4455),
 }
 
 

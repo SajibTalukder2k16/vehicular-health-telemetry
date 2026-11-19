@@ -19,11 +19,11 @@ WHAT IS COMPARED, AND THE TWO TRAPS
   readiness instant, so its "gap" is a maximum over whichever chunks happened
   to arrive and is not a readiness time at all.
 
-  Trap 1: a run contributing only one escalation contributes only a cold one.
-  That is why the pooled and per-seed summaries disagree in the first place,
-  so the test must not be built on either -- it compares first against later
-  directly, which is why runs with a single escalation contribute to the
-  `first` group alone and bias nothing.
+  Trap 1: order must be fixed BEFORE completeness is filtered, or the test
+  silently becomes "first COMPLETED escalation vs later completed ones". See
+  split()'s docstring; seed 54 of the 120-seed corpus is a worked example --
+  its first escalation delivers 97 of 99 chunks, so the old code promoted its
+  second escalation to "first".
 
   Trap 2: the WLAN arm is the control and must come out flat. If it does not,
   the effect is not about grant acquisition and the mechanism is wrong.
@@ -31,6 +31,7 @@ WHAT IS COMPARED, AND THE TWO TRAPS
     python3 -I tools/grant_warmup.py <corpus> <condition> [--arm e4]
 """
 import argparse
+import math
 import os
 import statistics
 import sys
@@ -44,21 +45,48 @@ TOL = 1e-2
 
 
 def split(per, cond, arm):
-    """-> (first-escalation gaps, later-escalation gaps)"""
+    """-> (first gaps, later gaps, [(first, median later) per run])
+
+    ORDER IS DETERMINED BEFORE COMPLETENESS IS FILTERED. An earlier version
+    filtered to complete bursts and then took index 0, so a run whose first
+    escalation was incomplete promoted its SECOND to "first" -- comparing the
+    first COMPLETED escalation against later completed ones, which is a
+    different and much weaker question. An external review found a real
+    misclassification of this kind in seed 54.
+
+    A run whose first escalation is incomplete therefore contributes nothing
+    to `first` (an incomplete burst has no readiness instant and so no gap)
+    while its later complete bursts still contribute to `later`.
+
+    The third return value pairs, within each run that has both, the first
+    gap against the median of its later gaps. First and later observations
+    from one run share a trajectory, so the unpaired test overstates its
+    sample size; the paired sign test on that list does not.
+    """
     exp = EXPECTED[arm]
-    first, later = [], []
+    first, later, pairs = [], [], []
     for (c, a, s), (al, ch) in per.items():
         if c != cond or a != arm:
             continue
-        full = ch if exp is None else {t: v for t, v in ch.items()
-                                       if len(v) >= exp}
         al_sorted = sorted(al)
-        rows = [(cr, r) for (cr, _), r in
-                zip(al_sorted, pair_bursts(al_sorted, full, TOL)) if r[2] > 0]
-        rows.sort()
+        # index over EVERY escalation, complete or not
+        rows = sorted(zip((cr for cr, _ in al_sorted),
+                          pair_bursts(al_sorted, ch, TOL)))
+        f, l = None, []
         for i, (_, r) in enumerate(rows):
-            (first if i == 0 else later).append(r[1] - r[0])
-    return first, later
+            complete = exp is None or r[2] >= exp
+            if not complete:
+                continue
+            gap = r[1] - r[0]
+            if i == 0:
+                f = gap
+                first.append(gap)
+            else:
+                l.append(gap)
+                later.append(gap)
+        if f is not None and l:
+            pairs.append((f, statistics.median(l)))
+    return first, later, pairs
 
 
 def main():
@@ -71,7 +99,7 @@ def main():
     per = load_corpus(a.corpus)
     if not per:
         sys.exit(f"no parseable output in {a.corpus}")
-    first, later = split(per, a.condition, a.arm)
+    first, later, pairs = split(per, a.condition, a.arm)
     if not first:
         sys.exit(f"no complete bursts for {a.condition}/{a.arm}")
 
@@ -83,9 +111,23 @@ def main():
     print(f"  later  n={len(later):4d}  median {statistics.median(later):.4f} s")
     u, z, p = mann_whitney(first, later)
     ratio = statistics.median(first) / statistics.median(later)
-    print(f"  U = {u:.1f}  z = {z:.3f}  p = {p:.4g}  ->  "
-          f"{'SIGNIFICANT at 0.05' if p < 0.05 else 'NOT significant at 0.05'}")
+    print(f"  unpaired  U = {u:.1f}  z = {z:.3f}  p = {p:.4g}  ->  "
+          f"{'SIGNIFICANT' if p < 0.05 else 'not significant'} at 0.05")
+    print("            (observations from one run are dependent, so this")
+    print("             overstates the sample size -- see the paired test)")
     print(f"  ratio first/later = {ratio:.2f}x")
+    if len(pairs) >= 2:
+        nz = [(f, l) for f, l in pairs if abs(f - l) > 1e-12]
+        n = len(nz)
+        pos = sum(1 for f, l in nz if f > l)
+        k = min(pos, n - pos)
+        pp = min(1.0, 2.0 * sum(math.comb(n, i)
+                                for i in range(k + 1)) / 2.0 ** n) if n else 1.0
+        print(f"  paired, within run: {n} runs with both, {pos} slower first, "
+              f"exact sign test p = {pp:.4g}  ->  "
+              f"{'SIGNIFICANT' if pp < 0.05 else 'not significant'} at 0.05")
+    else:
+        print(f"  paired, within run: only {len(pairs)} run(s) have both")
 
 
 if __name__ == "__main__":

@@ -88,7 +88,12 @@ def mann_whitney(xs, ys):
     if var <= 0:
         return u, float("nan"), 1.0
     z = (abs(u - mu) - 0.5) / math.sqrt(var)
-    p = 2.0 * (1.0 - 0.5 * (1.0 + math.erf(z / math.sqrt(2.0))))
+    # STABLE TAIL. 2*(1 - Phi(z)) built from erf() cancels catastrophically
+    # once z is large: at z = 10.08 it returned exactly 0.0, which was then
+    # quoted in a table as "2e-16" -- a number the script could not produce.
+    # The two-sided tail is erfc(z/sqrt2) identically, and erfc is accurate
+    # to ~1e-300. At z = 10.08 that is 6.47e-24. Raised by external review.
+    p = math.erfc(z / math.sqrt(2.0))
     return u, z, min(1.0, p)
 
 
@@ -177,7 +182,7 @@ def main():
           f"{100*ca/(ca+la) if ca+la else float('nan'):.1f}%")
     print(f"  B  {cb:3d} complete / {lb:3d} lost   "
           f"{100*cb/(cb+lb) if cb+lb else float('nan'):.1f}%")
-    print(f"  p = {p:.4f}   -> "
+    print(f"  p = {p:.3g}   -> "
           f"{'SIGNIFICANT at 0.05' if p < 0.05 else 'NOT significant at 0.05'}")
     print("  (pools escalations; those within a run are correlated, so this")
     print("   p-value is anti-conservative -- see the clustered test below)")

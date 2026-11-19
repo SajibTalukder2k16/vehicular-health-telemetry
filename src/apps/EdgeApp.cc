@@ -12,11 +12,13 @@ using namespace inet;
 
 namespace paperrebuild {
 
-// sourceType codes (SensorData.msg): 0=wearable vitals, 1=OBD, 2=camera, 3=alarm
-static const int SRC_VITALS = 0;
-static const int SRC_OBD    = 1;
-static const int SRC_CAMERA = 2;
-static const int SRC_ALARM  = 3;
+// sourceType codes (SensorData.msg): 0=wearable vitals, 1=OBD, 2=camera,
+// 3=alarm, 4=evidence (synthesized here at escalation, not by a SensorSource)
+static const int SRC_VITALS   = 0;
+static const int SRC_OBD      = 1;
+static const int SRC_CAMERA   = 2;
+static const int SRC_ALARM    = 3;
+static const int SRC_EVIDENCE = 4;
 
 class EdgeApp : public ApplicationBase, public UdpSocket::ICallback
 {
@@ -88,6 +90,25 @@ class EdgeApp : public ApplicationBase, public UdpSocket::ICallback
     long numStaleDropped = 0;
     long numCritSuperseded = 0;
 
+    // ---- the derived architecture + the escalation ----
+    bool cameraTerminatesAtEdge = false;
+    long evidenceBytes = 0;             // 0 disables evidence entirely
+    long evidenceChunkBytes = 1400;
+    long numCameraTerminated = 0;       // counted, never forwarded
+    long numEvidenceEmitted = 0;        // chunks enqueued
+    long numEvidenceDropped = 0;        // chunks the evidence buffer refused
+    // Evidence chunks discarded for STALENESS, which is a different failure
+    // from a buffer refusal and must not be pooled with it. Added 2026-11-12
+    // after `evidenceChunksDropped` was found reading 0 through runs that were
+    // discarding ~173 evidence chunks each: the discard sites below never
+    // tested getSourceType(), so the loss landed only in `cameraStaleDropped`
+    // -- a counter whose name says "camera" while the camera, under
+    // `cameraTerminatesAtEdge=true`, never enters this queue at all.
+    // Misattributed, not invisible. See docs/PHASE2_RESULT.md section 4.
+    long numEvidenceStaleDropped = 0;
+    long numEscalations = 0;
+    long evidenceSeq = 0;
+
     simsignal_t cameraAdmittedSignal;
     simsignal_t cameraGateDroppedSignal;
     simsignal_t cameraPendingBytesSignal;
@@ -95,8 +116,27 @@ class EdgeApp : public ApplicationBase, public UdpSocket::ICallback
     simsignal_t inFlightBytesSignal;
     simsignal_t estThroughputSignal;
     simsignal_t bucketRateSignal;
+    simsignal_t evidenceEmittedSignal;
+    simsignal_t evidenceQueueDelaySignal;
 
     bool closedLoop() const { return policy >= POLICY_PRIO; }
+
+    // The class the gate defers. Kept in ONE place for the same reason
+    // dropsStaleCamera() is: the deferrable class changed when the
+    // architecture was derived (camera used to cross the WAN, now evidence
+    // does), and an inline type test would have had to change in four
+    // places with nothing to catch a missed one.
+    //
+    // Under the derived architecture the deferrable class is EVIDENCE. In the
+    // legacy configuration -- cameraTerminatesAtEdge=false, which every result
+    // set before 2026-11-06 used -- it is CAMERA, exactly as before, so those
+    // runs reproduce unchanged.
+    bool isDeferrable(int type) const
+    {
+        if (type == SRC_EVIDENCE)
+            return true;
+        return type == SRC_CAMERA && !cameraTerminatesAtEdge;
+    }
 
     // Which closed-loop policies discard camera frames that have gone stale in
     // the pending queue. Named rather than enumerated at the use site: when
@@ -142,6 +182,11 @@ class EdgeApp : public ApplicationBase, public UdpSocket::ICallback
             freshnessTarget = par("freshnessTarget").doubleValue();
             probeIncrement = par("probeIncrement").doubleValue() / 8.0;
             backoffFactor = par("backoffFactor");
+            cameraTerminatesAtEdge = par("cameraTerminatesAtEdge");
+            evidenceBytes = par("evidenceBytes").intValue();
+            evidenceChunkBytes = par("evidenceChunkBytes").intValue();
+            if (evidenceChunkBytes < 1)
+                throw cRuntimeError("evidenceChunkBytes must be >= 1B");
             dynRate = cameraRate / 8.0;    // start at the ceiling, adapt down
             tokens = cameraBurst;
             lastTokenUpdate = simTime();
@@ -153,6 +198,8 @@ class EdgeApp : public ApplicationBase, public UdpSocket::ICallback
             inFlightBytesSignal = registerSignal("inFlightBytes");
             estThroughputSignal = registerSignal("estThroughput");
             bucketRateSignal = registerSignal("bucketRate");
+            evidenceEmittedSignal = registerSignal("evidenceEmitted");
+            evidenceQueueDelaySignal = registerSignal("evidenceQueueDelay");
         }
     }
 
@@ -273,17 +320,89 @@ class EdgeApp : public ApplicationBase, public UdpSocket::ICallback
             emit(inFlightBytesSignal, inFlight());
     }
 
+    // The gate's own contribution to delay, attributed to the right class.
+    // Evidence and camera share the queue but answer different questions:
+    // camera gate delay was a sensing-freshness cost, evidence gate delay is
+    // a dispatch cost, and pooling them would make RQ2 unanswerable.
+    void emitGateDelay(SensorData *sd)
+    {
+        simtime_t d = simTime() - sd->getArrivalTime();
+        if (sd->getSourceType() == SRC_EVIDENCE)
+            emit(evidenceQueueDelaySignal, d);
+        else
+            emit(cameraGateDelaySignal, d);
+    }
+
+    // ------------------------------------------------------------- escalation
+    // An escalation is an ALERT plus the EVIDENCE the server verifies it with.
+    // The alert leaves immediately and ungated, as alarms always have. The
+    // evidence is chunked and handed to the deferrable path, so it competes
+    // for the same uplink at the same instant -- which is the conflict RQ2
+    // measures, not an artifact of this implementation.
+    void escalate(SensorData *alarm)
+    {
+        long seq = alarm->getSequenceNumber();
+        numEscalations++;
+        sendToCloud(alarm);                 // consumes alarm; alert first
+        if (evidenceBytes <= 0)
+            return;                         // alarm-only: the earlier corpus
+        long remaining = evidenceBytes;
+        while (remaining > 0) {
+            long len = std::min(remaining, evidenceChunkBytes);
+            remaining -= len;
+            // Created now, at the edge, because the edge is what detected the
+            // event and produced the evidence. End-to-end delay for this class
+            // is therefore measured from the detection instant, which is the
+            // quantity that matters for dispatch.
+            auto *ev = new SensorData("evidence");
+            ev->setSourceType(SRC_EVIDENCE);
+            ev->setSequenceNumber(seq * 1000000L + (evidenceSeq++ % 1000000L));
+            ev->setByteLength(len);
+            numEvidenceEmitted++;
+            emit(evidenceEmittedSignal, numEvidenceEmitted);
+            handleDeferrable(ev);
+        }
+    }
+
+    // One entry point for the deferrable class, whichever policy is in force.
+    void handleDeferrable(SensorData *sd)
+    {
+        if (policy == POLICY_NONE) {
+            // No gate at all: evidence goes out the instant it is produced.
+            // This is the baseline the managed policies are measured against,
+            // and the arm in which the conflict should be worst.
+            sendToCloud(sd);
+            return;
+        }
+        if (closedLoop()) {
+            enqueueDeferrableClosedLoop(sd);
+            return;
+        }
+        handleCameraOpenLoop(sd);
+    }
+
     // ---------------------------------------------------------------- open loop
     void drainPending()
     {
         refillTokens();
         while (!pending.isEmpty()) {
             auto *head = check_and_cast<SensorData *>(pending.front());
+            // getCreationTime(), NOT getArrivalTime(). Evidence is built with
+            // `new` inside escalate() and handed on by function call, never
+            // SENT, so its arrival time is never stamped and reads 0 -- which
+            // turned this test into `simTime() > cameraMaxAge` and discarded
+            // EVERY pending chunk once the clock passed maxAge. That is what
+            // produced C4.2's "dropPace delivers 45-47%". Creation time is set
+            // by cMessage's constructor for both classes, and for a camera
+            // frame it is also the better question: how old is this
+            // OBSERVATION, not when did it reach the gate. Fixed 2026-11-12.
             if (policy == POLICY_DROPPACE
-                && simTime() - head->getArrivalTime() > cameraMaxAge) {
+                && simTime() - head->getCreationTime() > cameraMaxAge) {
                 pending.pop();
                 pendingBytes -= head->getByteLength();
                 numStaleDropped++;
+                if (head->getSourceType() == SRC_EVIDENCE)
+                    numEvidenceStaleDropped++;
                 numGateDropped++;
                 emit(cameraGateDroppedSignal, numGateDropped);
                 emit(cameraPendingBytesSignal, pendingBytes);
@@ -297,7 +416,7 @@ class EdgeApp : public ApplicationBase, public UdpSocket::ICallback
             pendingBytes -= need;
             tokens -= need;
             emit(cameraPendingBytesSignal, pendingBytes);
-            emit(cameraGateDelaySignal, simTime() - head->getArrivalTime());
+            emitGateDelay(head);
             numAdmitted++;
             emit(cameraAdmittedSignal, numAdmitted);
             sendToCloud(head);
@@ -325,11 +444,12 @@ class EdgeApp : public ApplicationBase, public UdpSocket::ICallback
                 tokens -= len;
                 numAdmitted++;
                 emit(cameraAdmittedSignal, numAdmitted);
-                emit(cameraGateDelaySignal, SIMTIME_ZERO);
+                emitGateDelay(sd);
                 sendToCloud(sd);
             }
             else {
                 numGateDropped++;
+                if (sd->getSourceType() == SRC_EVIDENCE) numEvidenceDropped++;
                 emit(cameraGateDroppedSignal, numGateDropped);
                 delete sd;
             }
@@ -339,12 +459,13 @@ class EdgeApp : public ApplicationBase, public UdpSocket::ICallback
             tokens -= len;
             numAdmitted++;
             emit(cameraAdmittedSignal, numAdmitted);
-            emit(cameraGateDelaySignal, SIMTIME_ZERO);
+            emitGateDelay(sd);
             sendToCloud(sd);
             return;
         }
         if (pendingBytes + len > cameraQueueCapacity) {
             numGateDropped++;
+            if (sd->getSourceType() == SRC_EVIDENCE) numEvidenceDropped++;
             emit(cameraGateDroppedSignal, numGateDropped);
             delete sd;
             return;
@@ -408,11 +529,13 @@ class EdgeApp : public ApplicationBase, public UdpSocket::ICallback
         double budget = tokens;
         while (!pending.isEmpty()) {
             auto *head = check_and_cast<SensorData *>(pending.front());
-            if (dropsStaleCamera()
-                && simTime() - head->getArrivalTime() > cameraMaxAge) {
+            if (dropsStaleCamera()      // see the note in drainPending()
+                && simTime() - head->getCreationTime() > cameraMaxAge) {
                 pending.pop();
                 pendingBytes -= head->getByteLength();
                 numStaleDropped++;
+                if (head->getSourceType() == SRC_EVIDENCE)
+                    numEvidenceStaleDropped++;
                 numGateDropped++;
                 emit(cameraGateDroppedSignal, numGateDropped);
                 emit(cameraPendingBytesSignal, pendingBytes);
@@ -427,7 +550,7 @@ class EdgeApp : public ApplicationBase, public UdpSocket::ICallback
             budget -= need;
             tokens -= need;
             emit(cameraPendingBytesSignal, pendingBytes);
-            emit(cameraGateDelaySignal, simTime() - head->getArrivalTime());
+            emitGateDelay(head);
             numAdmitted++;
             emit(cameraAdmittedSignal, numAdmitted);
             sendToCloud(head);
@@ -442,11 +565,31 @@ class EdgeApp : public ApplicationBase, public UdpSocket::ICallback
         }
     }
 
+    // The deferrable class under a closed-loop policy. Factored out of
+    // handleClosedLoop so escalation evidence reaches exactly the same queue
+    // by the same rules -- the gate is re-aimed at a new class, not rewritten
+    // for it, which is what lets the measured rules (docs/PLAN_2026-11.md
+    // §8.1 C4.1, C4.2) carry over instead of needing re-establishing.
+    void enqueueDeferrableClosedLoop(SensorData *sd)
+    {
+        if (pendingBytes + sd->getByteLength() > cameraQueueCapacity) {
+            numGateDropped++;
+            if (sd->getSourceType() == SRC_EVIDENCE) numEvidenceDropped++;
+            emit(cameraGateDroppedSignal, numGateDropped);
+            delete sd;
+            return;
+        }
+        pendingBytes += sd->getByteLength();
+        pending.insert(sd);
+        emit(cameraPendingBytesSignal, pendingBytes);
+        drainClosedLoop();
+    }
+
     void handleClosedLoop(SensorData *sd)
     {
         int type = sd->getSourceType();
         if (type == SRC_ALARM) {
-            sendToCloud(sd);                  // distinct events, never delayed
+            escalate(sd);                     // alert now, evidence behind it
             return;
         }
         if (type == SRC_VITALS || type == SRC_OBD) {
@@ -461,17 +604,7 @@ class EdgeApp : public ApplicationBase, public UdpSocket::ICallback
             drainClosedLoop();
             return;
         }
-        // camera
-        if (pendingBytes + sd->getByteLength() > cameraQueueCapacity) {
-            numGateDropped++;
-            emit(cameraGateDroppedSignal, numGateDropped);
-            delete sd;
-            return;
-        }
-        pendingBytes += sd->getByteLength();
-        pending.insert(sd);
-        emit(cameraPendingBytesSignal, pendingBytes);
-        drainClosedLoop();
+        enqueueDeferrableClosedLoop(sd);       // camera (legacy) or evidence
     }
 
     void onFeedback(const Ptr<const GatewayFeedback>& fb)
@@ -515,6 +648,23 @@ class EdgeApp : public ApplicationBase, public UdpSocket::ICallback
                 delete sd;
                 return;
             }
+            int type = sd->getSourceType();
+            // The derived architecture: PRV-grade frames cost ~25.5 Mb/s and
+            // the uplink benchmark is 3 Mb/s, so the inference is local and
+            // raw frames never cross the WAN. Count and discard here -- the
+            // sensor-link hop they already traversed is where their cost is
+            // paid, and BleLink/WifiLink measure that.
+            if (type == SRC_CAMERA && cameraTerminatesAtEdge) {
+                numCameraTerminated++;
+                delete sd;
+                return;
+            }
+            // Escalation is two-part under every policy, including 'none':
+            // the alert must not wait behind its own evidence.
+            if (type == SRC_ALARM && evidenceBytes > 0) {
+                escalate(sd);
+                return;
+            }
             if (policy == POLICY_NONE) {
                 sendToCloud(sd);
                 return;
@@ -523,7 +673,7 @@ class EdgeApp : public ApplicationBase, public UdpSocket::ICallback
                 handleClosedLoop(sd);
                 return;
             }
-            if (sd->getSourceType() != SRC_CAMERA) {
+            if (!isDeferrable(type)) {
                 sendToCloud(sd);
                 return;
             }
@@ -564,6 +714,20 @@ class EdgeApp : public ApplicationBase, public UdpSocket::ICallback
         // the exporter and earlier result sets.
         recordScalar("maxObservedVitalsAge", maxObservedAge);
         recordScalar("meanBucketRateBps", rateUpdates ? rateSum * 8.0 / rateUpdates : 0.0);
+        // Escalation accounting. cameraTerminatedAtEdge is recorded even when
+        // zero so a result set states which architecture produced it rather
+        // than leaving that to be inferred from the ini.
+        recordScalar("cameraTerminatedAtEdge", numCameraTerminated);
+        recordScalar("escalations", numEscalations);
+        recordScalar("evidenceChunksEmitted", numEvidenceEmitted);
+        recordScalar("evidenceChunksDropped", numEvidenceDropped);
+        recordScalar("evidenceChunksStaleDropped", numEvidenceStaleDropped);
+        // The two together are the evidence the server will never see. Scoring
+        // a deferral policy on dispatch latency alone reads a faster decision
+        // made on less evidence as an improvement -- see C4.2.
+        recordScalar("evidenceChunksLost",
+                     numEvidenceDropped + numEvidenceStaleDropped);
+        recordScalar("evidenceBytesConfigured", (double)evidenceBytes);
         ApplicationBase::finish();
     }
 
