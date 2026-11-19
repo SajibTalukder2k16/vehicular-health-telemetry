@@ -366,28 +366,44 @@ No experiment in this project varies coverage alone. **The difference is
 reported; the attribution is not.** Only the WLAN→LTE step isolates a single
 factor.
 
-### 8b. The camera payload was NOT matched to the cellular campaign — and it is inert
+### 8b. ~~The camera payload was NOT matched~~ — **THIS CORRECTION WAS WRONG**
 
-§1 and the paper said the rig was "identical" to the cellular campaign. It is
-not: the indoor campaigns run the camera at 53,167 B, the cellular corpus at
-**4 KiB (Healthy) and 60 KiB (the other three)**. `escalation_pilot.sh`
-carries `CAM_BYTES=53167B`, but the committed Gate A corpus predates that
-line — its own manifest records 4KiB/60KiB, and the manifest does record
-command-line overrides, since `sendInterval` appears there as 0.0166667 s.
-The rate is 60 fps throughout.
-
-Rather than argue this away, it was measured: the indoor cellular arm was
-re-run at 4 KiB to match `CondHealthy`.
-
-| camera | alert | E4 gap | E4 dispatch | E4 completion |
-|---|---|---|---|---|
-| 53,167 B | 0.0157 | 0.0680 | 0.0840 | 32/35 |
-| 4 KiB | 0.0157 | 0.0680 | 0.0829 | 31/35 |
-
-**The alert and the gap are identical.** Completion moves by one burst. So the
-mismatch is real in the configuration and inert in the comparison, which is
-what the derived partition predicts — frames terminate at the edge and never
-cross the uplink.
+> ⚠ **RETRACTED 2026-11-18, same day.** This section accepted the reviewer's
+> point that the indoor campaigns ran a 53,167 B camera against 4 KiB/60 KiB
+> in the cellular corpus. **That is false, and so was the §8b correction.**
+> The 120-seed validator caught it: a `CondHealthy` arm run at the ini's
+> 4 KiB gave 25/12 complete/lost where the published cell is 31/6.
+>
+> The error came from trusting `analysis/escalation_vec/config_manifest.csv`,
+> which records `4KiB`. **A `.sca` carries two `config` lines for an
+> overridden parameter** — the command-line value and the ini value — and the
+> manifest extraction kept the ini one. The authoritative record is the `par`
+> line, which gives the effective value:
+>
+> ```
+> par CorridorNet.rig.camera messageLength 53167B
+> ```
+>
+> verified for **all four conditions in both the ladder and the gate
+> corpora**. Every campaign driver overrides `messageLength`, so the
+> per-condition 4 KiB/60 KiB sizes in the ini are never in force.
+>
+> **The payload was always matched at 53,167 B and 60 fps.** The reviewer's
+> point 2 is withdrawn, the 4 KiB arm is a payload *sensitivity* check rather
+> than a confound correction, and two passages in the paper that described
+> per-condition camera loads of 1.97 and 29.5 Mb/s were wrong and are fixed —
+> as was the same claim about the edge-cost campaign, which also runs
+> 53,167 B.
+>
+> **The lesson is about evidence, not arithmetic.** I confirmed a reviewer's
+> claim from a derived summary rather than from the corpus, having already
+> written down in this project that a secondary summary is not a source. The
+> `par` line was one grep away.
+>
+> What remains true from the original §8b: the measurement it prompted. Run
+> at 4 KiB, the indoor cellular arm gives an identical alert and E4 gap and
+> completion within one burst, so payload does not reach the verification
+> path. That was worth measuring and stands on its own.
 
 ### 8c. `compare_backhaul.py` applied one horizon to both inputs
 
@@ -457,3 +473,88 @@ the earlier table reported as `nan`: **13.86 ms** on the quiet WLAN, against
 - the 8.23 % BLE threshold is now **scoped** to this model's 30 ms interval,
   1 Mb/s PHY and 251 B data units. What generalises is that the floor is one
   PDU, not a share of bandwidth.
+
+---
+
+## 9. 120 seeds: both undetected steps resolve, and one conjecture dies
+
+**3,000 runs, 2026-11-18.** Driver `tools/indoor_power120.sh`, validator
+`tools/verify_power120.py`, corpora `results_{indoor_lte,indoor_lte_4k,healthy,
+outage}_120/` and `results_room5g_120/`. Five arms × five rungs × 120 seeds.
+
+§3 reported two contrasts as failures to detect, on 18–20 per-seed medians per
+cell. Quadrupling the seeds settles both — and overturns a third result that
+*had* looked solid.
+
+### 9a. Validation first
+
+Seeds 0–29 are the same seed-sets the published corpora used, so they must
+reproduce the published cells exactly. All five arms do, to the precision
+published:
+
+| arm | seeds 0–29 | published |
+|---|---|---|
+| `indoor_lte` | 32/3, .0680, .1320 | 32/3, .0680, .1320 |
+| `indoor_lte_4k` | 31/4, .0680, .1320 | 31/4, .0680 |
+| `healthy` | 31/6, .1920, .2035 | 31/6, .1920, .2035 |
+| `room5g` | 35/0, .0350, .0349 | 35/0, .0350, .0349 |
+| `outage` | 37/35, .4020, .4455 | 37/35, .4020, .4455 |
+
+**The validator earned itself immediately.** `healthy` failed on the first
+attempt — 25/12 against a published 31/6 — because the driver left
+`CondHealthy` at the ini's 4 KiB camera. That is how §8b's error was found;
+see the retraction there.
+
+### 9b. The result: three comparable steps, all significant
+
+| configuration | gap (per-seed) | ×  | gap $p$ | completion | compl. $p$ |
+|---|---|---|---|---|---|
+| WLAN 5 GHz, still, no load | .0349 | — | — | 111/111 (100 %) | — |
+| LTE, still, no load | .0910 | 2.61 | 2e-16 | 99/111 (89.2 %) | .0006 |
+| LTE, mobile, light load | .1895 | 2.08 | .0013 | 88/117 (75.2 %) | .015 |
+| LTE, mobile, outage | .4850 | 2.56 | 7e-06 | 123/242 (50.8 %) | 2e-05 |
+
+Completion $p$ is clustered by run. The three factors compound to
+**13.9×**, which is what the end points give directly (0.4850/0.0349).
+
+> **At 30 seeds the story was "the backhaul dominates" (3.78× against a
+> non-significant 1.54×). That was wrong.** The factors are alike, and the
+> earlier reading was an artefact of an unstable per-seed median — 0.1320 s
+> for the stationary cellular arm at 30 seeds against 0.0910 s at 120.
+
+### 9c. The cold/warm grant conjecture is withdrawn
+
+§3a offered cold-versus-warm uplink grant state to explain a twofold
+pooled/per-seed divergence, at 2.10× and p = 0.262, explicitly unclaimed.
+
+| | 30 seeds | 120 seeds |
+|---|---|---|
+| pooled vs per-seed divergence | 1.94× | **1.10×** |
+| first vs later escalation | 2.10× | **1.33×** |
+| $p$ | 0.262 | **0.311** |
+
+**The effect weakened as the data grew** and the divergence that motivated it
+largely vanished. That is the signature of a small-sample artefact, not a
+mechanism. Withdrawn. `tools/grant_warmup.py` is the test, and it reproduces
+the published 30-seed figures before being run at 120.
+
+### 9d. Predictions, scored
+
+| | prediction | outcome |
+|---|---|---|
+| **P1** | seeds 0–29 reproduce the published cells | ✔ all five, after the driver bug was fixed |
+| **P2** | Q1 (mobility+load gap) becomes significant, p ≈ .005 | ✔ **p = .0013**, ×2.08 |
+| **P3** | Q2 (cold/warm) becomes marginally significant | ✘ **weakened**: ×1.33, p = .311 |
+| **P4** | Q3 (backhaul completion) becomes significant | ✔ **clustered p = .0006** |
+| **P5** | point estimates barely move (1.3–1.8× and 1.8–2.4×) | ✘ **moved materially**: step 1 3.78→2.61, step 2 1.54→2.08 |
+
+**Three of five.** P5 is the one that mattered: it was written as the
+prediction most likely to embarrass the published tables, and it did.
+
+### 9e. What 120 seeds does not fix
+
+Power is not validity. Step 2 still changes mobility, load and window
+together; step 3 changes site count and spacing, propagation, load and window
+together. **The withdrawn attribution of §8a stays withdrawn** — nothing here
+varies coverage alone, and a significant difference is still not an attributed
+cause.

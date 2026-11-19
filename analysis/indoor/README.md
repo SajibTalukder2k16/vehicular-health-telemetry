@@ -14,6 +14,15 @@ from, so every one of them regenerates from this repository alone.
 | `indoor_lte_latencies.csv.gz` | `results_indoor_lte` | 150 | ladder, stationary unloaded edge on an LTE backhaul |
 | `indoor_lte_cam4k_latencies.csv.gz` | `results_indoor_lte_cam4k` | 150 | the same arm at a 4 KiB camera, matching `CondHealthy`'s payload |
 | `sensor_link_scalars.csv.gz` | all three room corpora | 1,050 | camera-link load, wearable vitals delivery |
+| `room5g_120_latencies.csv.gz` | `results_room5g_120` | 600 | **120 seeds**: WLAN 5 GHz |
+| `indoor_lte_120_latencies.csv.gz` | `results_indoor_lte_120` | 600 | **120 seeds**: stationary LTE |
+| `indoor_lte_4k_120_latencies.csv.gz` | `results_indoor_lte_4k_120` | 600 | **120 seeds**: the same at a 4 KiB camera |
+| `healthy_120_latencies.csv.gz` | `results_healthy_120` | 600 | **120 seeds**: `CondHealthy` |
+| `outage_120_latencies.csv.gz` | `results_outage_120` | 600 | **120 seeds**: `CondOutage` |
+
+The five `*_120_*` extracts are what the paper's decomposition table is
+computed from. At 30 seeds two of its three steps were not detectable and the
+third was unstable by a third; see `docs/INDOOR_BACKHAUL_RESULT.md` §9.
 
 The five `*_latencies.csv.gz` files hold the per-escalation vectors
 (`condition,arm,seed,kind,recv_time,delay,creation`) written by
@@ -75,7 +84,15 @@ sh tools/room_wifi_ladder.sh     # 300 runs, ~17 s
 sh tools/indoor_lte_ladder.sh    # 150 runs, ~43 s
 sh tools/room_ble_ladder.sh      # 450 runs, ~18 s  (Parts A, B and C)
 CAM4K=1 sh tools/indoor_lte_ladder.sh   # 150 runs; the 4 KiB camera control
+sh tools/indoor_power120.sh      # 2,400 runs, ~13 min; the 120-seed arms
 ```
+
+**Run `tools/verify_power120.py` on any 120-seed corpus before using it.**
+Seeds 0–29 are the same seed-sets the 30-seed corpora used, so they must
+reproduce the published cells exactly. That check caught a real error: the
+driver initially left `CondHealthy` at the configuration's 4 KiB camera
+instead of the 53,167 B every campaign actually runs, giving 25/12
+complete/lost against a published 31/6.
 
 The `CAM4K=1` control exists because the cellular corpus runs its camera at
 4 KiB (`CondHealthy`) or 60 KiB, not at the 53,167 B the indoor campaigns use.

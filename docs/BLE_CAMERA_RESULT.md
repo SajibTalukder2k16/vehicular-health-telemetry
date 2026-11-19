@@ -35,8 +35,8 @@ interval $= \mathbf{0.781\ Mb/s}$ theoretical.
 
 `docs/BLE_VALIDATION.md` measures **0.737 Mb/s**. The 5.6 % shortfall is PDU
 quantisation on a message's last fragment, so the **effective ceiling depends
-on message size**. Measured here: **0.765 Mb/s** for 4 KiB frames and
-**0.747 Mb/s** for 53,167 B frames. Anywhere the paper quotes a single BLE
+on message size**. Measured here: **0.762 Mb/s** for 4 KiB frames and
+**0.744 Mb/s** for 53,167 B frames. Anywhere the paper quotes a single BLE
 number it should say which.
 
 ---
@@ -47,10 +47,14 @@ Camera at 53,167 B and 60 fps, i.e. 25.5 Mb/s offered.
 
 | | frames offered | dropped | drop rate | delivered |
 |---|---|---|---|---|
-| camera on BLE | 17,969 | 17,443 | **97.07 %** | 0.747 Mb/s |
+| camera on BLE | 17,969 | 17,443 | **97.07 %** | 0.744 Mb/s |
 
-The 2.93 % that gets through is **0.747 Mb/s**, which is the link ceiling to
-three decimal places. The queue sits at 52,415 B of 65,536 B. So C1's BLE row
+The 2.93 % that gets through delivers **0.744 Mb/s**, which is the link
+ceiling. ⚠ **These are measured delivered rates, counted from transmission
+completions** (`linkDelay` fires only when a message clears the link), not
+`offered × (1 − dropped/sent)` — that subtraction counts a frame still queued
+at termination as delivered and reads 0.747 here. Raised by external review;
+see `docs/INDOOR_BACKHAUL_RESULT.md` §8e. The queue sits at 52,415 B of 65,536 B. So C1's BLE row
 is confirmed: a PRV-grade stream is **34.1×** beyond what BLE carries, the
 largest of the eight constraint margins.
 
@@ -82,17 +86,23 @@ largest of the eight constraint margins.
 "BLE cannot carry the camera" is true at PRV grade and false in general. The
 useful answer is where the boundary is.
 
-| frame | fps | offered | dropped | delivered |
-|---|---|---|---|---|
-| 53,167 B | 60 | 25.52 Mb/s | 97.07 % | 0.747 |
-| 53,167 B | 2 | 0.85 Mb/s | 49.96 % | 0.426 |
-| 4 KiB | 60 | 1.97 Mb/s | 61.09 % | 0.765 |
-| 4 KiB | 30 | 0.98 Mb/s | 22.20 % | 0.765 |
-| **4 KiB** | **10** | **0.33 Mb/s** | **0.00 %** | 0.328 |
+| frame | fps | offered | dropped | accepted | **delivered** |
+|---|---|---|---|---|---|
+| 53,167 B | 60 | 25.52 Mb/s | 97.07 % | 0.747 | **0.744** |
+| 53,167 B | 2 | 0.85 Mb/s | 49.96 % | 0.426 | **0.424** |
+| 4 KiB | 60 | 1.97 Mb/s | 61.09 % | 0.765 | **0.762** |
+| 4 KiB | 30 | 0.98 Mb/s | 22.20 % | 0.765 | **0.762** |
+| **4 KiB** | **10** | **0.33 Mb/s** | **0.00 %** | 0.328 | **0.327** |
+
+`accepted` is the `offered × (1 − dropped/sent)` estimate; `delivered` is
+counted from transmission completions. The estimate is high by ≤ 0.06 % here,
+so the distinction changes no conclusion — but it is the same distinction §4
+insists on for the wearable, and it should not have been applied to one and
+not the other.
 
 **A 4 KiB camera at 10 fps fits, losing nothing at all.** Saturated goodput is
-0.765 Mb/s, so at 4 KiB the feasible frontier is
-$0.765 \times 10^6 / (4096 \times 8) = \mathbf{23.3\ fps}$ — consistent with
+0.762 Mb/s, so at 4 KiB the feasible frontier is
+$0.762 \times 10^6 / (4096 \times 8) = \mathbf{23.3\ fps}$ — consistent with
 22.2 % loss measured at 30 fps and zero at 10.
 
 ### 3a. Large frames waste the link
