@@ -665,3 +665,76 @@ The enumerated campaigns now sum to the stated total: 600 + 480 + 960 + 1,350
 + 3,000 + 2,160 = **8,550**. The indoor bullet said 1,200 while listing 1,350,
 the 3,000-run campaign was absent from the list, and the campaign table's
 caption asserted 30 seeds for every cell.
+
+---
+
+## 11. Fourth review round, 2026-11-19: consistency
+
+The reviewer confirmed the §10 fixes from the extracts — including that the
+first 30 seeds of all five expanded extracts reproduce the earlier summaries —
+and raised five consistency items. All five were verified and applied.
+
+### 11a. The methods described only one design
+
+Three statements predated the 120-seed comparison and contradicted it: that
+"every contrast reported in this paper" is within-condition and paired, that
+"each cell has 30 seeds", and that all contrasts use within-seed sign tests.
+Table VII does neither — it compares configurations, unpaired, at 120 seeds.
+
+The statistical treatment now states both designs: within-condition policy and
+payload contrasts use matched seeds and exact two-sided sign tests on per-seed
+differences; the network-configuration comparison uses 120 seeds per
+configuration with Mann–Whitney on per-seed median gaps and per-run completion
+fractions. The ~35-escalation figure for `CondHealthy` is now scoped to the
+original 30-seed campaign.
+
+### 11b. Related Work and Figure 1 were broader than Proposition 2
+
+Related Work said delaying evidence cannot improve dispatch "by work
+conservation" and the figure caption said the gate "can only add delay, never
+remove any" — both stated as universal network properties, and both in tension
+with our own observation that individual escalations sometimes become ready
+sooner under pacing. Both now read: under Proposition 2's fixed-service
+assumptions delaying release cannot advance completion, and in the LTE
+configurations evaluated pacing did not reduce the conditional median gap,
+although individual-escalation outcomes varied.
+
+### 11c. The capacity argument is now conditional everywhere
+
+"The inference cannot be anywhere else", "the inference must be local" and
+"PRV-grade sensing must be local" are replaced by wording that ties the
+conclusion to the evaluated sensing requirements and link capacities. The
+abstract already did this; the introduction, the figure caption and the
+conclusion did not.
+
+### 11d. The payload sensitivity result, reported properly
+
+The paper said payload "should not matter to these results at all" and quoted
+30-seed figures as "unchanged". Both overstated. Terminating frames at the
+edge removes their uplink traffic but not every route through shared
+processing or buffering, and the expanded extracts already carried the answer:
+
+| stationary LTE payload | completion | per-seed median gap |
+|---|---|---|
+| 53,167 B | 99/111 | 0.0910 s |
+| 4 KiB | 101/111 | 0.1010 s |
+
+A ratio of 1.11×, neither difference detectable (gap p = 0.891, completion
+clustered p = 0.784). So payload accounts for none of Table VII's
+differences — but the honest statement bounds a payload effect at this spread
+rather than excluding one, and two payloads are not a curve. "Every campaign
+runs the camera at 53,167 B" is now "the main comparisons do", with the
+frame-rate and payload exceptions named.
+
+### 11e. The artifact README was still the old paper
+
+It carried the withdrawn title *Evidence Delays the Decision, Not the Alert*
+and two claims the manuscript no longer makes — that the cost is "linear in
+evidence bytes" and that the gate "cannot reduce it". Rewritten to the current
+title, the slope range with its knee caveat, the fixed-service qualification,
+and the 120-seed comparison.
+
+Revision-history passages were also compressed: the byte-versus-burst lesson,
+the two-corpus discrepancy and the conclusion's self-reference now state the
+methodological point without narrating how it was found. The detailed history
+stays here, which is where the reviewer suggested it belongs.

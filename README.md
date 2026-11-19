@@ -1,17 +1,27 @@
-# Evidence Delays the Decision, Not the Alert
+# Alert and Evidence Delivery over LTE for In-Vehicle Health Monitoring
 
-Artifact repository for the paper of the same name: the OMNeT++/Simu5G models,
+Artifact repository for the paper of that title: the OMNeT++/Simu5G models,
 scenario configurations, campaign drivers and analysis scripts behind every
 number in it.
 
 The paper follows one chain of four steps. A camera-based health monitor's
-sensing grade is priced against eight capacity constraints, and the resulting
-edge partition is **forced by capacity rather than chosen**. With the inference
-local, the verification evidence that justifies an alert turns out not to delay
-the **alert** but the **decision** a dispatcher can act on. That cost is linear
-in evidence bytes. And a token-bucket gate in front of the evidence — the
-machinery such systems inherit — cannot reduce it, which we derive and then
-spend 2,160 runs trying to falsify.
+sensing grade is priced against eight capacity constraints, and **under the
+evaluated sensing requirements and link capacities** that comparison motivates
+local inference. With the inference local, the verification evidence that
+justifies an alert turns out not to delay the **alert** but the **decision** a
+dispatcher can act on. The conditional median gap grows with evidence volume,
+with descriptive log–log slopes of 0.81–1.16 over the three payload sizes
+tested — which cannot exclude a knee. And a token-bucket gate in front of the
+evidence — the machinery such systems inherit — did not reduce that gap in any
+of 48 configurations across 2,160 runs, which we derive under stated
+fixed-service assumptions and then try to falsify.
+
+A 3,000-run extension at 120 seeds per configuration then compares indoor and
+mobile network configurations: the conditional gap spans about a factor of two
+at each of three steps. Only the first of those matches mobility, load, window
+and workload, and even it contrasts two complete network configurations, so
+these are differences between stated configurations rather than isolated
+causes.
 
 > **This repository was rewritten on 2026-11-16.** It previously held the
 > artifact for *From Room to Road: Adapting Edge Traffic for Timely Health
