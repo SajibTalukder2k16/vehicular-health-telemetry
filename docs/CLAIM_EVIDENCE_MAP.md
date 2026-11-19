@@ -270,3 +270,38 @@ not throughput. A BLE link's floor is set by quantisation.
 drop counter reads 57.53 % while delivery is **zero**; the other 42.5 % sit in
 a queue that never drains. Scoring that arm on drop rate reports a partial
 problem where the truth is total failure.
+
+## Added 2026-11-18 (third) — the 120-seed decomposition
+
+Evidence: `docs/INDOOR_BACKHAUL_RESULT.md` §9. Corpora
+`results_{room5g,indoor_lte,indoor_lte_4k,healthy,outage}_120/` (3,000 runs),
+extracts `analysis/indoor/*_120_latencies.csv.gz`, driver
+`tools/indoor_power120.sh`, validator `tools/verify_power120.py`.
+
+| claim in the paper | evidence | status |
+|---|---|---|
+| The delivery cost separates into three steps of ~2× each | ×2.61 / ×2.08 / ×2.56, compounding to 13.9× = 0.4850/0.0349 | **significant on all three** |
+| Each step also costs completion | 100 → 89.2 → 75.2 → 50.8 %, clustered p = .0006 / .015 / 2e-05 | **significant on all three** |
+| Only the first step isolates one factor | steps 2 and 3 vary mobility+load+window and geometry+propagation+load+window | **stated, not attributed** |
+| The alert cost is the backhaul alone | 1.3 ms WLAN → 15.7 ms LTE still → 16.1 ms mobile+loaded | **measured** |
+
+**Two earlier readings withdrawn, both from 30-seed instability:**
+
+1. **"The backhaul dominates the gap" (3.78× vs a non-significant 1.54×).**
+   The per-seed median for the stationary cellular arm was 0.1320 s at 30
+   seeds and 0.0910 s at 120. The three factors are comparable, not ordered.
+2. **The cold/warm grant conjecture.** Divergence 1.94× → 1.10×, ratio
+   2.10× → 1.33×, p 0.262 → 0.311. The effect weakened as the data grew.
+
+**And one of my own corrections withdrawn.** §8b accepted a review point that
+the camera payload was unmatched (53,167 B indoors against 4 KiB/60 KiB on
+cellular). False: a `.sca` carries two `config` lines for an overridden
+parameter and `config_manifest.csv` kept the ini one, while the authoritative
+`par` line reads `53167B` for all four conditions in both corpora. Found by
+`verify_power120.py` failing a `CondHealthy` arm, 25/12 against 31/6. Two
+paper passages claiming per-condition loads of 1.97 and 29.5 Mb/s were wrong
+and are fixed, as was the same claim about the edge-cost campaign.
+
+> **The rule this broke:** a secondary summary is not a source. It is written
+> down in this project and I used a derived manifest to confirm a claim about
+> a corpus that was one grep away.

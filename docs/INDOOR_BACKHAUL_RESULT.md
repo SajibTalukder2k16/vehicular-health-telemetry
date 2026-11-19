@@ -128,6 +128,12 @@ there, not active.
 
 ## 3. The cellular indoor backhaul: the decomposition
 
+> ⚠ **SUPERSEDED BY §9.** The table below is the 30-seed reading. Two of its
+> three steps were not detectable at that power and the third was unstable by
+> a third, so its ordering --- "the backhaul dominates" --- did not survive
+> 120 seeds. **Use §9 for every number in this section.** This one is kept
+> because the paper's withdrawal paragraphs refer to it.
+
 At E4 (138 kB of evidence). Gap medians in seconds, conditional on completion.
 Both summaries are given because on cellular they diverge — see §3a.
 
